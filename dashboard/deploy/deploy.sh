@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Deploy the ARK dashboard to a Docker host over SSH.
+# Deploy the ARK dashboard (Rust server) to a Docker host over SSH.
 #   ./deploy/deploy.sh <ssh-target> [remote-dir] [host-port]
 # e.g. ./deploy/deploy.sh docker-host   (or root@10.0.0.20, or an ssh alias)
+#
+# The image is built HERE (the target needs no internet and no Rust toolchain) and shipped as a tar:
+#   CONTAINER_CLI=docker|podman   (default: docker, else podman)   PODMAN_CONNECTION=<name> for a podman machine
+# cargo test + clippy must pass first. Nothing on the target is built with `docker compose --build`.
 #
 # Site-specific settings (which Proxmox, which VM, which UniFi) live in
 # deploy/site.env, which is gitignored — this script ships no addresses. Copy
@@ -42,12 +46,24 @@ if [ -z "${PVE_TLS_FINGERPRINT:-}" ] && [ "${PVE_TLS_INSECURE:-}" != "1" ]; then
   exit 1
 fi
 
-echo "→ syncing $PROJ to $TARGET:$REMOTE_DIR"
+CLI="${CONTAINER_CLI:-$(command -v docker >/dev/null 2>&1 && echo docker || echo podman)}"
+CLI_ARGS=()
+[ -n "${PODMAN_CONNECTION:-}" ] && CLI_ARGS+=(--connection "$PODMAN_CONNECTION")
+TAG="$(git -C "$PROJ" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M)"
+
+echo "→ cargo test + clippy"
+( cd "$PROJ/server" && cargo test -q --locked >/dev/null && cargo clippy -q --locked --all-targets -- -D warnings ) \
+  || { echo "error: cargo test/clippy failed — not deployed" >&2; exit 1; }
+
+echo "→ building image ark-dashboard-rs:$TAG (linux/amd64)"
+"$CLI" "${CLI_ARGS[@]}" build --format docker --platform linux/amd64 -t "ark-dashboard-rs:$TAG" "$PROJ"
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+"$CLI" "${CLI_ARGS[@]}" save -o "$TMP/ark-dashboard-rs.tar" "ark-dashboard-rs:$TAG"
+
+echo "→ shipping image + compose file to $TARGET:$REMOTE_DIR"
 ssh "$TARGET" "mkdir -p $REMOTE_DIR/deploy"
-rsync -az --delete \
-  --exclude node_modules --exclude .git --exclude '*.log' \
-  --exclude 'backend/.env' --exclude 'deploy/.env' \
-  "$PROJ"/ "$TARGET:$REMOTE_DIR"/
+scp -q "$TMP/ark-dashboard-rs.tar" "$TARGET:$REMOTE_DIR/ark-dashboard-rs.tar"
+scp -q "$PROJ/docker-compose.yml" "$TARGET:$REMOTE_DIR/docker-compose.yml"
 
 echo "→ writing remote deploy/.env (secrets from Keychain)"
 # Which Keychain entries hold the secrets. The names themselves are site-specific
@@ -99,8 +115,8 @@ UNIFI_TLS_INSECURE=${UNIFI_TLS_INSECURE:-}
 ENV
 ssh "$TARGET" "chmod 600 $REMOTE_DIR/deploy/.env"
 
-echo "→ building + starting container (host port $HOST_PORT)"
-ssh "$TARGET" "cd $REMOTE_DIR && HOST_PORT=$HOST_PORT docker compose up -d --build"
+echo "→ loading image + starting container (host port $HOST_PORT)"
+ssh "$TARGET" "cd $REMOTE_DIR && docker load -i ark-dashboard-rs.tar && rm -f ark-dashboard-rs.tar && ARK_DASH_TAG=$TAG HOST_PORT=$HOST_PORT docker compose up -d --no-build --force-recreate"
 
 echo "→ health check"
 sleep 8

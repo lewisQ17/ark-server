@@ -161,5 +161,27 @@ add('edge-map-delete-fj', 'DELETE', '/api/maps/Fjordur');
 add('edge-map-delete-unknown', 'DELETE', '/api/maps/NeverExisted');
 add('edge-state-after', 'GET', '/api/state?after=1');
 
+// ---- proxmox mode + hardening (recorded against stubs.js; see run-original-pve.js) ----
+const origin = (o) => ({ authorization: auth, 'content-type': 'application/json', origin: o });
+add('sec-cross-origin-post', 'POST', '/api/rcon', { id: 'theisland', command: 'ListPlayers' }, origin('https://evil.example'));
+add('sec-origin-null', 'POST', '/api/rcon', { id: 'theisland', command: 'ListPlayers' }, origin('null'));
+add('sec-same-origin-post', 'POST', '/api/rcon', { id: 'theisland', command: 'ListPlayers' }, origin('http://127.0.0.1:8787'));
+add('sec-cross-origin-delete', 'DELETE', '/api/maps/Nothing', undefined, { authorization: auth, origin: 'https://evil.example' });
+add('sec-cross-origin-get', 'GET', '/api/health', undefined, { authorization: auth, origin: 'https://evil.example' });
+add('sec-cross-origin-noauth', 'POST', '/api/rcon', { id: 'theisland', command: 'x' }, { 'content-type': 'application/json', origin: 'https://evil.example' });
+add('pve-vmreboot', 'POST', '/api/instance/theisland/action', { action: 'vmreboot' });
+add('pve-vmshutdown', 'POST', '/api/instance/theisland/action', { action: 'vmshutdown' });
+add('pve-map-create-fwd', 'POST', '/api/maps', { display: 'Valguero', internal: 'Valguero_WP', gamePort: 7791, queryPort: 27040, rconPort: 27041, maxPlayers: 30, adminPassword: 'dummy-vg', cores: 2, ramGB: 6 });
+add('pve-map-create-fwd-again', 'POST', '/api/maps', { display: 'Valguero', internal: 'Valguero_WP', gamePort: 7791, queryPort: 27040, rconPort: 27041, maxPlayers: 30, adminPassword: 'dummy-vg' });
+add('pve-map-create-fwd-fails', 'POST', '/api/maps', { display: 'Failmap', internal: 'Failmap_WP', gamePort: 7795, queryPort: 27050, rconPort: 27051, maxPlayers: 10, adminPassword: 'dummy-fm' });
+add('pve-map-create-nan-port', 'POST', '/api/maps', { display: 'Nanmap', internal: 'Nanmap_WP', gamePort: 'abc', queryPort: 27060, rconPort: 27061, maxPlayers: 10, adminPassword: 'dummy-nm' });
+add('pve-state-with-maps', 'GET', '/api/state?maps=1');
+add('pve-map-delete-valguero', 'DELETE', '/api/maps/Valguero');
+add('pve-map-delete-valguero-again', 'DELETE', '/api/maps/Valguero');
+add('pve-map-delete-failmap', 'DELETE', '/api/maps/Failmap');
+add('pve-map-delete-nanmap', 'DELETE', '/api/maps/Nanmap');
+add('pve-audit-final', 'GET', '/api/audit?pve=1');
+add('pve-state-final', 'GET', '/api/state?pve=2');
+
 require('fs').writeFileSync(__dirname + '/cases.jsonl', out.map((o) => JSON.stringify(o)).join('\n') + '\n');
 console.log(out.length, 'cases');

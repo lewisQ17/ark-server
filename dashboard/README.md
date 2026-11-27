@@ -46,10 +46,11 @@ you exactly which ones are missing instead of failing silently.
 including the dashboard login. The table below only applies to proxmox mode and to
 deploying the container to a separate Docker host.
 
-### 1. Running the backend directly (proxmox mode)
+### 1. Running the server directly (proxmox mode)
 
 ```bash
-cp dashboard/.env.example dashboard/backend/.env
+cp dashboard/.env.example dashboard/.env      # fill it in; the server does not read .env itself, so load it:
+set -a; . dashboard/.env; set +a
 ```
 
 Then fill in:
@@ -116,7 +117,7 @@ browser ─http→ dashboard container (Docker host)
 ## Layout
 
 ```
-backend/    Express API + poller (proxmox.js, ark.js, server.js, config.js)
+server/     Rust server (axum): API + poller (proxmox.rs, unifi.rs, pinned.rs, ark.rs, security.rs, server.rs, config.rs)
 frontend/   index.html (design template + live logic) + support.js (dc-runtime) + React
 deploy/     deploy.sh + site.env (your addresses, gitignored) + .env (secrets, gitignored)
 Dockerfile, docker-compose.yml
@@ -131,14 +132,16 @@ mock data with live API data. Rebuild `index.html` after editing either:
 
 Local dev (see [Setup](#setup--what-you-have-to-fill-in) for the values):
 ```bash
-cd backend && cp ../.env.example .env   # then fill it in
-npm install && npm start                # http://localhost:8787
+cp .env.example .env && $EDITOR .env    # fill it in
+set -a; . ./.env; set +a
+(cd server && cargo run --release)       # http://localhost:8787 (needs Rust 1.85+)
+# no VM at hand? a demo against an in-memory fake world:  ARK_EXEC_MODE=fake DASH_PASS=x cargo run --release
 ```
 
 Deploy to a Docker host (needs `deploy/site.env` first):
 ```bash
 cp deploy/site.env.example deploy/site.env   # fill in your own addresses
-./deploy/deploy.sh <ssh-target>              # rsync + writes remote .env + docker compose up --build
+./deploy/deploy.sh <ssh-target>              # tests, builds the image here, ships it as a tar, writes the remote .env, compose up --no-build
 # dashboard on http://<host>:8790/
 ```
 
@@ -155,7 +158,7 @@ cp deploy/site.env.example deploy/site.env   # fill in your own addresses
 
 - Proxmox and UniFi use self-signed certs, so CA-chain validation cannot work. The
   client pins the exact peer certificate by SHA-256 fingerprint instead
-  (`backend/pinned-agent.js`) and **fails closed**: without `PVE_TLS_FINGERPRINT`
+  (`server/src/pinned.rs`) and **fails closed**: without `PVE_TLS_FINGERPRINT`
   it refuses to start rather than sending the root ticket to an unverified peer.
   `PVE_TLS_INSECURE=1` overrides that, but then any device on your LAN can
   intercept the credential — only use it while testing.
@@ -165,31 +168,35 @@ cp deploy/site.env.example deploy/site.env   # fill in your own addresses
 - RCON admin password is weak (`map.conf` `AdminPassword`) and, per the known ARK-manager
   bug, appears in the server's own launch args. Rotating it is recommended separately.
 
-## Hardening in de backend
+## Hardening in de server
 
-- `backend/security.js`: vaste security-headers, Origin-controle op muterende requests
+- `server/src/security.rs`: vaste security-headers, Origin-controle op muterende requests
   (POST/PUT/PATCH/DELETE met een vreemde `Origin` = 403; extra toegestane origins via
   `ALLOWED_ORIGINS`, komma-gescheiden) en een oplopende vertraging na mislukte logins
   (geldige logins worden nooit vertraagd).
 - Achter een reverse proxy: zet `TRUSTED_PROXIES` (IP's/CIDR, komma-gescheiden). Alleen dan
   worden `CF-Connecting-IP` / `X-Forwarded-For` gebruikt voor het client-IP; anders telt het
   directe peer-adres.
-- Container draait als non-root (`USER node`) met een `HEALTHCHECK` op `/api/health`.
+- Container draait als non-root (uid 1000, statische musl-binary op Alpine) met een `HEALTHCHECK` op `/api/health`.
 
 ## Tests
 
 ```bash
-cd backend && npm ci && npm test
+cd server && cargo test && cargo clippy --all-targets -- -D warnings
+sh server/tests/replay.sh        # 167 opnames van de oorspronkelijke Node-server (vraagt rust-anything)
 ```
 
-Draait de map-naam-regressietest en de auth/security-tests. CI (`.github/workflows/ci.yml`)
-doet hetzelfde plus een syntaxcheck van de shell-scripts en gitleaks.
+`cargo test` bevat de map-naam-regressietests, de auth/security-tests en de Proxmox/UniFi-clients tegen
+HTTPS-stubs. CI (`.github/workflows/ci.yml`) draait `cargo test` en clippy plus een syntaxcheck van de
+shell-scripts en gitleaks. Hoe de server uit de Node-backend ontstond en hoe je live omschakelt:
+`docs/rust/DECISIONS.md` en `docs/rust/CUTOVER.md`.
 
 ## Let op bij uitrollen
 
-Gebruik `deploy/deploy.sh` en bouw niet ad hoc met `docker compose up --build` in een
-bestaande uitrol-map: een eerder handmatig afgeleid image kan afwijken van deze Dockerfile
-(die express wel via `npm ci` installeert). Bij twijfel: eerst vergelijken wat er draait.
+Gebruik `deploy/deploy.sh` (of de stappen in `docs/rust/CUTOVER.md`) en bouw niet ad hoc met
+`docker compose up --build` op een host zonder internet: het image wordt op de werkplek gebouwd en
+als tar geladen. Een eerder handmatig afgeleid image kan afwijken van deze Dockerfile; bij twijfel:
+eerst vergelijken wat er draait.
 
 ## Frontend-bestanden
 

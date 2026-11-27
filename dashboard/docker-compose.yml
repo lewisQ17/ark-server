@@ -1,5 +1,6 @@
 services:
   ark-dashboard:
+    image: ark-dashboard-rs:${ARK_DASH_TAG:-latest}
     build: .
     container_name: ark-dashboard
     restart: unless-stopped

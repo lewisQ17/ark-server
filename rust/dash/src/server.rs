@@ -57,14 +57,26 @@ struct Inner {
 pub struct AppState {
     pub cfg: Config,
     pub exec: Arc<dyn Exec>,
+    pub udm: Option<crate::unifi::Unifi>,
+    throttle: crate::security::Throttle,
     inner: Mutex<Inner>,
 }
 
 impl AppState {
     pub fn new(cfg: Config, exec: Arc<dyn Exec>) -> Arc<Self> {
+        Self::with_udm(cfg, exec, None)
+    }
+
+    pub fn with_udm(
+        cfg: Config,
+        exec: Arc<dyn Exec>,
+        udm: Option<crate::unifi::Unifi>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             cfg,
             exec,
+            udm,
+            throttle: crate::security::Throttle::standard(),
             inner: Mutex::new(Inner {
                 arks: Vec::new(),
                 discovered: Vec::new(),
@@ -106,7 +118,14 @@ impl AppState {
 
     /// Re-scan the maps on the VM; keep existing instances (and their caches), add new, drop removed.
     pub async fn sync_maps(&self) {
-        let found = ark::discover_maps(&self.exec, &self.cfg.ark).await;
+        let found = match ark::discover_maps(&self.exec, &self.cfg.ark).await {
+            Ok(f) => f,
+            Err(e) => {
+                // like the original: keep what we had, the next cycle tries again
+                eprintln!("[syncMaps] {e}");
+                return;
+            }
+        };
         let mut keep: Vec<String> = Vec::new();
         let mut fresh: Vec<(String, Arc<ArkInstance>)> = Vec::new();
         for m in &found {
@@ -177,7 +196,8 @@ impl AppState {
             let dr = self
                 .exec
                 .guest_shell("df -B1 / 2>/dev/null | tail -1", ShellOpts::default())
-                .await;
+                .await
+                .unwrap_or_default();
             let parts: Vec<&str> = dr.out.split_whitespace().collect();
             if parts.len() >= 4 {
                 let used = parse_int(parts[2]).map(|n| to_fixed(n as f64 / 1e9, 0));
@@ -293,18 +313,26 @@ impl AppState {
         let arks: Vec<(String, Arc<ArkInstance>)> = self.with(|i| i.arks.clone());
         let mut any_feed: Option<Vec<Value>> = None;
         for (id, ark) in &arks {
-            let st = ark.status().await;
-            let cfg_summary = ark.config_summary().await;
+            let st = ark.status().await.unwrap_or_else(|_| ark::Status {
+                state: String::new(),
+                dash: "unknown".into(),
+                start_ts: String::new(),
+            });
+            let cfg_summary = ark.config_summary().await.unwrap_or(Value::Null);
             let mut players: Vec<Value> = Vec::new();
             if st.dash == "running" {
                 players = ark
                     .players()
                     .await
+                    .unwrap_or_else(|_| json!({"players": []}))
                     .get("players")
                     .and_then(Value::as_array)
                     .cloned()
                     .unwrap_or_default();
-                let lg = ark.log_tail("150").await;
+                let lg = ark
+                    .log_tail("150")
+                    .await
+                    .unwrap_or_else(|_| json!({"ok": false, "lines": []}));
                 if truthy(lg.get("ok")) && any_feed.is_none() {
                     let lines: Vec<String> = lg
                         .get("lines")
@@ -369,8 +397,8 @@ impl AppState {
                 )
             }) || cycle.is_multiple_of(self.cfg.discover_every_n);
             if need_rsc {
-                let r = ark.resources().await;
-                self.with(|i| i.cache.rsc.insert(id.clone(), Rsc::Val(r)));
+                let r = ark.resources().await.map_or(Rsc::Null, Rsc::Val);
+                self.with(|i| i.cache.rsc.insert(id.clone(), r));
             }
             let rsc = self.with(|i| i.cache.rsc.get(id).cloned().unwrap_or(Rsc::Null));
             let rv = match &rsc {
@@ -483,8 +511,11 @@ impl AppState {
             &ark.name,
             true,
         );
-        ark.rcon("SaveWorld").await;
-        let _ = ark.service_action("restart").await;
+        let _ = ark.rcon("SaveWorld").await;
+        if let Err(e) = ark.service_action("restart").await {
+            eprintln!("[leak-guard] {e}");
+            return;
+        }
         self.with(|i| {
             i.cache.rsc.insert(id.to_string(), Rsc::Unset);
             let item = json!({"who": "Leak-guard", "action": format!("saved the world + restarted (RAM {} GB, no players online)", crate::util::num_str(live)), "map": ark.name, "type": "sys"});
@@ -515,6 +546,26 @@ fn jr(status: u16, v: &Value) -> Response {
         "application/json; charset=utf-8",
         serde_json::to_string(v).unwrap_or_else(|_| "null".into()),
     )
+}
+
+/// 200 with the value, or the original's `catch`: 500 `{ok:false, error, ...extra}`.
+fn done(r: Result<Value, String>, extra: Value) -> Response {
+    match r {
+        Ok(v) => jr(200, &v),
+        Err(e) => {
+            let mut o = json!({"ok": false, "error": e});
+            if let (Some(m), Some(x)) = (o.as_object_mut(), extra.as_object()) {
+                for (k, v) in x {
+                    m.insert(k.clone(), v.clone());
+                }
+            }
+            jr(500, &o)
+        }
+    }
+}
+
+fn fail(e: &str) -> Response {
+    jr(500, &json!({"ok": false, "error": e}))
 }
 
 fn text(status: u16, s: &str) -> Response {
@@ -748,7 +799,7 @@ async fn route(st: &Arc<AppState>, r: &Req<'_>) -> Option<Response> {
             } else {
                 "gus"
             };
-            return Some(jr(200, &a.read_config(which).await));
+            return Some(done(a.read_config(which).await, json!({"ini": ""})));
         }
         (4, Some(x)) if seg_is(x, "config") && *m == Method::POST => {
             return config_post(st, r, &r.segs[2], s[3]).await;
@@ -762,14 +813,14 @@ async fn route(st: &Arc<AppState>, r: &Req<'_>) -> Option<Response> {
             let Some(a) = st.ark(&r.segs[2]) else {
                 return Some(jr(200, &json!({"ok": false, "error": "not found"})));
             };
-            return Some(jr(200, &a.update_check().await));
+            return Some(done(a.update_check().await, json!({})));
         }
         (4, Some(x)) if seg_is(x, "update") && *m == Method::POST && seg_is(s[3], "apply") => {
             let Some(a) = st.ark(&r.segs[2]) else {
                 return Some(jr(400, &json!({"ok": false, "error": "not found"})));
             };
             st.log_audit("admin", "Apply update + restart", &a.name, true);
-            return Some(jr(200, &a.apply_update().await));
+            return Some(done(a.apply_update().await, json!({})));
         }
         _ => {}
     }
@@ -817,7 +868,10 @@ async fn rcon_route(st: &Arc<AppState>, r: &Req<'_>) -> Response {
     else {
         return jr(400, &json!({"ok": false, "error": "command required"}));
     };
-    let res = a.rcon(command).await;
+    let res = match a.rcon(command).await {
+        Ok(v) => v,
+        Err(e) => return fail(&e),
+    };
     let lc = command.to_ascii_lowercase();
     let danger = ["doexit", "destroy", "kick", "ban"]
         .iter()
@@ -856,7 +910,7 @@ async fn instance_route(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -
                     st.log_audit(
                         "admin",
                         &format!("VM {mapped}"),
-                        &format!("VM {}", st.cfg.pve_vmid),
+                        &format!("VM {}", st.cfg.pve.vmid),
                         true,
                     );
                     jr(
@@ -870,7 +924,7 @@ async fn instance_route(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -
             && let Some(a) = ark
         {
             st.log_audit("admin", "SaveWorld", &a.name, false);
-            return Some(jr(200, &a.rcon("SaveWorld").await));
+            return Some(done(a.rcon("SaveWorld").await, json!({})));
         }
         return Some(jr(400, &json!({"ok": false, "error": "unknown action"})));
     }
@@ -878,13 +932,17 @@ async fn instance_route(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -
         let Some(a) = ark else {
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
-        let res = a
+        let res = match a
             .update_settings(
                 r.b("sessionName"),
                 r.b("adminPassword"),
                 r.b("serverPassword"),
             )
-            .await;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         if truthy(res.get("ok")) {
             let changed = res
                 .get("changed")
@@ -904,7 +962,10 @@ async fn instance_route(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -
         let Some(a) = ark else {
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
-        let res = a.resources().await;
+        let res = match a.resources().await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         let (vc, vr) = st.vm_budget();
         let mut o = res.as_object().cloned().unwrap_or_default();
         o.insert("vmCores".into(), num(vc));
@@ -916,7 +977,10 @@ async fn instance_route(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
         let (vc, vr) = st.vm_budget();
-        let res = a.set_resources(r.b("cores"), r.b("ramGB"), vc, vr).await;
+        let res = match a.set_resources(r.b("cores"), r.b("ramGB"), vc, vr).await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         if truthy(res.get("ok")) {
             st.log_audit(
                 "admin",
@@ -946,7 +1010,7 @@ async fn console_route(st: &Arc<AppState>, r: &Req<'_>, id: &str) -> Response {
         Some(n) => parse_int(n).map_or_else(|| "NaN".to_string(), |v| v.to_string()),
         None => "200".to_string(),
     };
-    jr(200, &a.log_tail(&n).await)
+    done(a.log_tail(&n).await, json!({"lines": []}))
 }
 
 async fn config_post(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -> Option<Response> {
@@ -959,7 +1023,10 @@ async fn config_post(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -> O
         };
         let key = js_str_opt(r.b("key"));
         let value = js_str_opt(r.b("value"));
-        let res = a.set_config_key(&key, &value, which).await;
+        let res = match a.set_config_key(&key, &value, which).await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         st.log_audit("admin", &format!("set {key}={value}"), &a.name, false);
         return Some(jr(200, &res));
     }
@@ -973,7 +1040,10 @@ async fn config_post(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -> O
             }
             Some(c) => js_str(c),
         };
-        let res = a.write_config_raw(which, &content).await;
+        let res = match a.write_config_raw(which, &content).await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         if truthy(res.get("ok")) {
             st.log_audit(
                 "admin",
@@ -997,7 +1067,10 @@ async fn config_post(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -> O
         let Some(a) = ark else {
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
-        let res = a.set_platforms(&list).await;
+        let res = match a.set_platforms(&list).await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         let label = match res.get("platform") {
             Some(p) if truthy(Some(p)) => js_str(p),
             _ => match &list {
@@ -1028,7 +1101,7 @@ async fn backups_route(st: &Arc<AppState>, r: &Req<'_>, id: &str) -> Option<Resp
         let Some(a) = ark else {
             return Some(jr(200, &json!({"ok": true, "backups": []})));
         };
-        return Some(jr(200, &a.backups_list().await));
+        return Some(done(a.backups_list().await, json!({"backups": []})));
     }
     if *r.method == Method::DELETE {
         let Some(a) = ark else {
@@ -1041,7 +1114,10 @@ async fn backups_route(st: &Arc<AppState>, r: &Req<'_>, id: &str) -> Option<Resp
             ));
         }
         let name = js_str_opt(r.b("name"));
-        let res = a.delete_backup(&name).await;
+        let res = match a.delete_backup(&name).await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         if truthy(res.get("ok")) {
             st.log_audit("admin", &format!("Delete snapshot {name}"), &a.name, true);
         }
@@ -1056,7 +1132,10 @@ async fn backups_post(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -> 
         let Some(a) = ark else {
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
-        let res = a.create_backup().await;
+        let res = match a.create_backup().await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         st.log_audit("admin", "Backup snapshot", &a.name, false);
         return Some(jr(200, &res));
     }
@@ -1072,7 +1151,7 @@ async fn backups_post(st: &Arc<AppState>, r: &Req<'_>, id: &str, what: &str) -> 
         }
         let name = js_str_opt(r.b("name"));
         st.log_audit("admin", &format!("Restore snapshot {name}"), &a.name, true);
-        return Some(jr(200, &a.restore_backup(&name).await));
+        return Some(done(a.restore_backup(&name).await, json!({})));
     }
     None
 }
@@ -1084,15 +1163,19 @@ async fn schedule_route(st: &Arc<AppState>, r: &Req<'_>, id: &str) -> Option<Res
         let Some(a) = ark else {
             return Some(jr(200, &json!({"ok": true, "jobs": []})));
         };
-        return Some(jr(200, &a.schedule().await));
+        return Some(done(a.schedule().await, json!({"jobs": []})));
     }
     if *r.method == Method::POST {
         let Some(a) = ark else {
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
-        let res = a
+        let res = match a
             .add_schedule(r.b("taskType"), r.b("cron"), r.b("message"), &r.body)
-            .await;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         if truthy(res.get("ok")) {
             st.log_audit(
                 "admin",
@@ -1111,7 +1194,10 @@ async fn schedule_route(st: &Arc<AppState>, r: &Req<'_>, id: &str) -> Option<Res
         let Some(a) = ark else {
             return Some(jr(400, &json!({"ok": false, "error": "not found"})));
         };
-        let res = a.delete_schedule(r.b("match")).await;
+        let res = match a.delete_schedule(r.b("match")).await {
+            Ok(v) => v,
+            Err(e) => return Some(fail(&e)),
+        };
         if truthy(res.get("ok")) {
             st.log_audit("admin", "Remove schedule", &a.name, true);
         }
@@ -1125,9 +1211,44 @@ async fn create_map_route(st: &Arc<AppState>, r: &Req<'_>) -> Response {
         return jr(400, &json!({"ok": false, "error": "map name required"}));
     }
     let display = js_str_opt(r.b("display"));
-    let mut res = ark::create_map(&st.exec, &st.cfg.ark, &r.body).await;
+    let mut res = match ark::create_map(&st.exec, &st.cfg.ark, &r.body).await {
+        Ok(v) => v,
+        Err(e) => return fail(&e),
+    };
     if truthy(res.get("ok")) {
         st.log_audit("admin", &format!("Created map {display}"), &display, false);
+        // Open the internet-facing game port on the UDM (RCON and query stay LAN-only).
+        if let Some(udm) = &st.udm
+            && truthy(r.b("gamePort"))
+        {
+            let game_port = js_str_opt(r.b("gamePort"));
+            let wan = parse_int(&game_port);
+            let (ip, proto) = (&st.cfg.unifi.ark_vm_ip, &st.cfg.unifi.proto);
+            let fwd = crate::unifi::Forward {
+                name: &format!("ARK-{display}"),
+                wan_port: wan,
+                fwd_ip: ip,
+                proto,
+            };
+            let forward = match udm.upsert_forward(&fwd).await {
+                Ok(()) => {
+                    st.log_audit(
+                        "admin",
+                        &format!("Opened WAN {game_port}/{proto} \u{2192} {ip}"),
+                        &display,
+                        false,
+                    );
+                    json!({"ok": true, "wanPort": wan.map_or(Value::Null, |w| json!(w))})
+                }
+                Err(e) => {
+                    eprintln!("[unifi create] {e}");
+                    json!({"ok": false, "error": e})
+                }
+            };
+            if let Some(o) = res.as_object_mut() {
+                o.insert("forward".into(), forward);
+            }
+        }
         st.sync_maps().await;
         let cores = js_number(r.b("cores"));
         let ram = js_number(r.b("ramGB"));
@@ -1135,7 +1256,10 @@ async fn create_map_route(st: &Arc<AppState>, r: &Req<'_>) -> Response {
             && let Some(a) = st.ark(&display.to_lowercase())
         {
             let (vc, vr) = st.vm_budget();
-            let rr = a.set_resources(r.b("cores"), r.b("ramGB"), vc, vr).await;
+            let rr = a
+                .set_resources(r.b("cores"), r.b("ramGB"), vc, vr)
+                .await
+                .unwrap_or_else(|e| json!({"ok": false, "error": e}));
             if truthy(rr.get("ok")) {
                 st.log_audit(
                     "admin",
@@ -1157,9 +1281,35 @@ async fn create_map_route(st: &Arc<AppState>, r: &Req<'_>) -> Response {
 }
 
 async fn delete_map_route(st: &Arc<AppState>, display: &str) -> Response {
-    let res = ark::delete_map(&st.exec, &st.cfg.ark, display).await;
+    let mut res = match ark::delete_map(&st.exec, &st.cfg.ark, display).await {
+        Ok(v) => v,
+        Err(e) => return fail(&e),
+    };
     if truthy(res.get("ok")) {
         st.log_audit("admin", &format!("Deleted map {display}"), display, true);
+        // Remove the map's WAN forward so nothing stays exposed after deletion.
+        if let Some(udm) = &st.udm {
+            let forward = match udm.delete_forward_by_name(&format!("ARK-{display}")).await {
+                Ok(removed) => {
+                    if removed > 0 {
+                        st.log_audit(
+                            "admin",
+                            &format!("Closed WAN forward ({removed})"),
+                            display,
+                            true,
+                        );
+                    }
+                    json!({"ok": true, "removed": removed})
+                }
+                Err(e) => {
+                    eprintln!("[unifi delete] {e}");
+                    json!({"ok": false, "error": e})
+                }
+            };
+            if let Some(o) = res.as_object_mut() {
+                o.insert("forward".into(), forward);
+            }
+        }
         st.sync_maps().await;
     }
     jr(200, &res)
@@ -1271,9 +1421,30 @@ fn static_file(root: &Path, raw_path: &str, query: Option<&str>, head: bool) -> 
 }
 
 pub async fn dispatch(State(st): State<Arc<AppState>>, req: Request) -> Response {
+    let mut resp = dispatch_inner(&st, req).await;
+    crate::security::apply_headers(&mut resp);
+    resp
+}
+
+async fn dispatch_inner(st: &Arc<AppState>, req: Request) -> Response {
     let (parts, body) = req.into_parts();
+    let peer = parts
+        .extensions
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0.ip().to_string())
+        .unwrap_or_default();
+    let ip = crate::security::client_ip(&peer, &parts.headers, &st.cfg.trusted_proxies);
+    st.throttle.expire(&ip, now_ms() as u64);
     if let Some(r) = check_auth(&st.cfg, &parts.headers) {
+        // failed logins are answered after a growing delay; a missing header is not a login attempt
+        if r.status() == StatusCode::UNAUTHORIZED && parts.headers.contains_key(header::AUTHORIZATION) {
+            let wait = st.throttle.failed(&ip, now_ms() as u64);
+            tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+        }
         return r;
+    }
+    if crate::security::cross_origin_refused(&parts.method, &parts.headers, &st.cfg.allowed_origins) {
+        return text(403, "Cross-origin request geweigerd.\n");
     }
     let bytes = axum::body::to_bytes(body, 100 * 1024)
         .await
@@ -1301,7 +1472,7 @@ pub async fn dispatch(State(st): State<Arc<AppState>>, req: Request) -> Response
         query: parse_query(parts.uri.query()),
         body: body_map,
     };
-    if let Some(resp) = route(&st, &r).await {
+    if let Some(resp) = route(st, &r).await {
         return resp;
     }
     let get = parts.method == Method::GET || parts.method == Method::HEAD;
@@ -1331,8 +1502,12 @@ pub fn app(st: Arc<AppState>) -> axum::Router {
 }
 
 /// Start the server: first poll, then listen, then poll on an interval.
-pub async fn run(cfg: Config, exec: Arc<dyn Exec>) -> Result<(), String> {
-    let st = AppState::new(cfg.clone(), exec);
+pub async fn run(
+    cfg: Config,
+    exec: Arc<dyn Exec>,
+    udm: Option<crate::unifi::Unifi>,
+) -> Result<(), String> {
+    let st = AppState::with_udm(cfg.clone(), exec, udm);
     st.sync_maps().await;
     st.refresh().await;
     let poll = st.clone();
@@ -1355,7 +1530,8 @@ pub async fn run(cfg: Config, exec: Arc<dyn Exec>) -> Result<(), String> {
         cfg.port,
         match cfg.mode {
             crate::config::Mode::Fake => "fake VM (in-memory)",
-            _ => "local",
+            crate::config::Mode::Proxmox => "proxmox",
+            crate::config::Mode::Local => "local",
         }
     );
     if !cfg.auth.enabled {
@@ -1367,7 +1543,10 @@ pub async fn run(cfg: Config, exec: Arc<dyn Exec>) -> Result<(), String> {
             "ERROR: DASH_PASS is empty \u{2014} every request will be refused until you set it in deploy/.env."
         );
     }
-    axum::serve(listener, app(st))
-        .await
+    axum::serve(
+        listener,
+        app(st).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
         .map_err(|e| e.to_string())
 }

@@ -316,12 +316,12 @@ impl ArkInstance {
         format!("{}/maps/{}", self.dir, self.display)
     }
 
-    async fn rcon_pw(&self) -> String {
+    async fn rcon_pw(&self) -> Result<String, String> {
         if !self.cfg.rcon_password_override.is_empty() {
-            return self.cfg.rcon_password_override.clone();
+            return Ok(self.cfg.rcon_password_override.clone());
         }
         if let Some(p) = self.caches.lock().expect("lock").pw.clone() {
-            return p;
+            return Ok(p);
         }
         let def_conf = format!("{}/config/server-defaults.conf", self.dir);
         let script = format!(
@@ -332,7 +332,7 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(15_000))
-            .await;
+            .await?;
         let pw = match (r.out.find("PW<"), r.out.rfind(">PW")) {
             (Some(s), Some(e)) if e >= s + 3 => {
                 r.out[s + 3..e].trim_end_matches(['\r', '\n']).to_string()
@@ -340,16 +340,16 @@ impl ArkInstance {
             _ => String::new(),
         };
         self.caches.lock().expect("lock").pw = Some(pw.clone());
-        pw
+        Ok(pw)
     }
 
     /// Run one RCON command. Re-reads the admin password once when auth fails (it may have been rotated).
-    pub async fn rcon(&self, command: &str) -> Value {
+    pub async fn rcon(&self, command: &str) -> Result<Value, String> {
         let mut retried = false;
         loop {
-            let pw = self.rcon_pw().await;
+            let pw = self.rcon_pw().await?;
             if pw.is_empty() {
-                return json!({"ok": false, "error": "admin password not found"});
+                return Ok(json!({"ok": false, "error": "admin password not found"}));
             }
             let script = format!("python3 -c {} {}", shq(RCON_PY), self.rcon_port);
             let r = self
@@ -360,7 +360,7 @@ impl ArkInstance {
                         .input(format!("{pw}\n{command}"))
                         .timeout(15_000),
                 )
-                .await;
+                .await?;
             let out = js_trim(&r.out).to_string();
             let err = js_trim(&r.err).to_string();
             if out.contains("__RCON_AUTH_FAIL__") {
@@ -369,22 +369,22 @@ impl ArkInstance {
                     retried = true;
                     continue;
                 }
-                return json!({"ok": false, "error": "RCON auth failed (bad admin password)"});
+                return Ok(json!({"ok": false, "error": "RCON auth failed (bad admin password)"}));
             }
             if err.contains("__RCON_ERR__") || r.exitcode == 3 {
                 let e = js_trim(&err.replacen("__RCON_ERR__", "", 1)).to_string();
-                return json!({"ok": false, "error": if e.is_empty() { "RCON connection failed".to_string() } else { e }});
+                return Ok(json!({"ok": false, "error": if e.is_empty() { "RCON connection failed".to_string() } else { e }}));
             }
-            return json!({"ok": true, "output": out});
+            return Ok(json!({"ok": true, "output": out}));
         }
     }
 
-    pub async fn status(&self) -> Status {
+    pub async fn status(&self) -> Result<Status, String> {
         let script = format!(
             "systemctl is-active {s} 2>/dev/null; echo \"---\"; systemctl show {s} -p SubState,ExecMainStartTimestamp 2>/dev/null",
             s = self.service
         );
-        let r = self.exec.guest_shell(&script, ShellOpts::default()).await;
+        let r = self.exec.guest_shell(&script, ShellOpts::default()).await?;
         let mut parts = r.out.split("---");
         let active = parts.next().unwrap_or("");
         let rest = parts.next().unwrap_or("");
@@ -403,13 +403,13 @@ impl ArkInstance {
             "failed" => "crashed",
             _ => "stopped",
         };
-        Status {
+        Ok(Status {
             state,
             dash: dash.into(),
             start_ts: conf_get(&props, "ExecMainStartTimestamp")
                 .unwrap_or("")
                 .to_string(),
-        }
+        })
     }
 
     pub async fn service_action(&self, action: &str) -> Result<Value, String> {
@@ -422,29 +422,29 @@ impl ArkInstance {
                 &format!("systemctl {action} {} 2>&1; echo \"exit=$?\"", self.service),
                 ShellOpts::default(),
             )
-            .await;
+            .await?;
         static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let re = R.get_or_init(|| Regex::new(r"exit=0\b").expect("re"));
         Ok(json!({"ok": re.is_match(&r.out), "output": js_trim(&r.out)}))
     }
 
     /// Current per-world caps and live RAM use (`ok`, `cores`, `ramGB`, `ramUsedGB`).
-    pub async fn resources(&self) -> Value {
+    pub async fn resources(&self) -> Result<Value, String> {
         if !re_service().is_match(&self.service) {
-            return json!({"ok": false, "cores": null, "ramGB": null, "ramUsedGB": null});
+            return Ok(json!({"ok": false, "cores": null, "ramGB": null, "ramUsedGB": null}));
         }
         let script = format!(
             "systemctl show {} -p CPUQuotaPerSecUSec -p MemoryMax -p MemoryCurrent 2>/dev/null",
             self.service
         );
-        let r = self.exec.guest_shell(&script, ShellOpts::default()).await;
+        let r = self.exec.guest_shell(&script, ShellOpts::default()).await?;
         let p = parse_conf(&r.out);
-        json!({
+        Ok(json!({
             "ok": true,
             "cores": span_to_cores(conf_get(&p, "CPUQuotaPerSecUSec")),
             "ramGB": bytes_to_gb(conf_get(&p, "MemoryMax")),
             "ramUsedGB": bytes_to_gb(conf_get(&p, "MemoryCurrent")),
-        })
+        }))
     }
 
     /// Apply a CPU-core cap and RAM ceiling (GB), clamped to the VM; refuses an unsafe shrink unless forced.
@@ -454,11 +454,11 @@ impl ArkInstance {
         ram_gb: Option<&Value>,
         vm_cores: f64,
         vm_ram: f64,
-    ) -> Value {
+    ) -> Result<Value, String> {
         if !re_service().is_match(&self.service) {
-            return json!({"ok": false, "error": "unsafe service name"});
+            return Ok(json!({"ok": false, "error": "unsafe service name"}));
         }
-        let cur = self.resources().await;
+        let cur = self.resources().await.unwrap_or(Value::Null);
         let g = |k: &str| cur.get(k).and_then(Value::as_f64);
         let cur_cores = g("cores").unwrap_or(vm_cores);
         let cur_ram = g("ramGB").unwrap_or(vm_ram);
@@ -478,10 +478,10 @@ impl ArkInstance {
             && live > 0.1
             && r < live * 1.15
         {
-            return json!({
+            return Ok(json!({
                 "ok": false, "needsForce": true, "liveGB": num(live), "cores": num(c), "ramGB": num(r),
                 "error": format!("Requested {} GB is below this world's live use ({} GB). Stop the world first or raise the limit.", num_str(r), num_str(live))
-            });
+            }));
         }
         let quota = format!("{}%", num_str(js_round(c * 100.0)));
         let high = format!("{}M", num_str(256f64.max(js_round(r * 0.9 * 1024.0))));
@@ -490,25 +490,25 @@ impl ArkInstance {
             "systemctl set-property {} CPUQuota={quota} MemoryHigh={high} MemoryMax={max} 2>&1; echo \"rc=$?\"",
             self.service
         );
-        let res = self.exec.guest_shell(&script, ShellOpts::default()).await;
+        let res = self.exec.guest_shell(&script, ShellOpts::default()).await?;
         static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let re_rc = R.get_or_init(|| Regex::new(r"rc=0\b").expect("re"));
         static R2: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let re_tail = R2.get_or_init(|| Regex::new(r"rc=\d+\s*$").expect("re"));
-        json!({
+        Ok(json!({
             "ok": re_rc.is_match(&res.out), "cores": num(c), "ramGB": num(r), "quota": quota, "memHigh": high, "memMax": max,
             "output": js_trim(&re_tail.replace(&res.out, "")),
-        })
+        }))
     }
 
-    pub async fn players(&self) -> Value {
-        let r = self.rcon("ListPlayers").await;
+    pub async fn players(&self) -> Result<Value, String> {
+        let r = self.rcon("ListPlayers").await?;
         if !truthy(r.get("ok")) {
-            return json!({"ok": false, "error": r.get("error").cloned().unwrap_or(Value::Null), "players": []});
+            return Ok(json!({"ok": false, "error": r.get("error").cloned().unwrap_or(Value::Null), "players": []}));
         }
         let txt = r.get("output").and_then(Value::as_str).unwrap_or("");
         if txt.to_ascii_lowercase().contains("no players") {
-            return json!({"ok": true, "players": []});
+            return Ok(json!({"ok": true, "players": []}));
         }
         static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let re = R.get_or_init(|| {
@@ -520,12 +520,12 @@ impl ArkInstance {
                 players.push(json!({"slot": c[1].parse::<i64>().unwrap_or(0), "name": js_trim(&c[2]), "id": &c[3]}));
             }
         }
-        json!({"ok": true, "players": players})
+        Ok(json!({"ok": true, "players": players}))
     }
 
-    async fn paths(&self) -> Paths {
+    async fn paths(&self) -> Result<Paths, String> {
         if let Some(p) = self.caches.lock().expect("lock").paths.clone() {
-            return p;
+            return Ok(p);
         }
         let md = self.map_dir();
         let script = format!(
@@ -535,7 +535,7 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(20_000))
-            .await;
+            .await?;
         let p = parse_conf(&r.out);
         let g = |k: &str| conf_get(&p, k).unwrap_or("").to_string();
         let paths = Paths {
@@ -545,14 +545,14 @@ impl ArkInstance {
             backups: g("BKP"),
         };
         self.caches.lock().expect("lock").paths = Some(paths.clone());
-        paths
+        Ok(paths)
     }
 
     /// Last `n` log lines with secrets hidden. `n` is passed on as text (`NaN` stays `NaN`, as in the original).
-    pub async fn log_tail(&self, n: &str) -> Value {
-        let log = self.paths().await.log;
+    pub async fn log_tail(&self, n: &str) -> Result<Value, String> {
+        let log = self.paths().await?.log;
         if log.is_empty() {
-            return json!({"ok": false, "error": "server log not found", "lines": []});
+            return Ok(json!({"ok": false, "error": "server log not found", "lines": []}));
         }
         let r = self
             .exec
@@ -560,25 +560,25 @@ impl ArkInstance {
                 &format!("tail -n {n} {} 2>/dev/null", shq(&log)),
                 ShellOpts::user(&self.user),
             )
-            .await;
+            .await?;
         let lines: Vec<Value> = r
             .out
             .split('\n')
             .filter(|l| !l.is_empty())
             .map(|l| Value::String(redact_secrets(l)))
             .collect();
-        json!({"ok": true, "lines": lines})
+        Ok(json!({"ok": true, "lines": lines}))
     }
 
-    pub async fn read_config(&self, which: &str) -> Value {
-        let paths = self.paths().await;
+    pub async fn read_config(&self, which: &str) -> Result<Value, String> {
+        let paths = self.paths().await?;
         let path = if which == "game" {
             paths.game
         } else {
             paths.gus
         };
         if path.is_empty() {
-            return json!({"ok": false, "error": "config file not found", "ini": ""});
+            return Ok(json!({"ok": false, "error": "config file not found", "ini": ""}));
         }
         let r = self
             .exec
@@ -586,20 +586,20 @@ impl ArkInstance {
                 &format!("cat {} 2>/dev/null", shq(&path)),
                 ShellOpts::user(&self.user),
             )
-            .await;
-        json!({"ok": true, "path": path, "ini": redact_secrets(&r.out)})
+            .await?;
+        Ok(json!({"ok": true, "path": path, "ini": redact_secrets(&r.out)}))
     }
 
     /// Overwrite a config file. Lines the editor still shows redacted are restored from disk.
-    pub async fn write_config_raw(&self, which: &str, content: &str) -> Value {
-        let paths = self.paths().await;
+    pub async fn write_config_raw(&self, which: &str, content: &str) -> Result<Value, String> {
+        let paths = self.paths().await?;
         let path = if which == "game" {
             paths.game
         } else {
             paths.gus
         };
         if path.is_empty() {
-            return json!({"ok": false, "error": "config file not found"});
+            return Ok(json!({"ok": false, "error": "config file not found"}));
         }
         let cur = self
             .exec
@@ -607,7 +607,7 @@ impl ArkInstance {
                 &format!("cat {} 2>/dev/null", shq(&path)),
                 ShellOpts::user(&self.user),
             )
-            .await;
+            .await?;
         let mut real: Vec<(String, String)> = Vec::new();
         for l in cur.out.split('\n') {
             if let Some((_, k, _, v)) = match_kv_greedy(l) {
@@ -639,24 +639,24 @@ impl ArkInstance {
                     .input(ascii_safe(&merged))
                     .timeout(15_000),
             )
-            .await;
+            .await?;
         self.caches.lock().expect("lock").cfg = None;
-        json!({"ok": true, "path": path})
+        Ok(json!({"ok": true, "path": path}))
     }
 
     /// Write one `key=value` under its section of GameUserSettings.ini (or Game.ini).
-    pub async fn set_config_key(&self, key: &str, value: &str, file: &str) -> Value {
+    pub async fn set_config_key(&self, key: &str, value: &str, file: &str) -> Result<Value, String> {
         if !valid_name(key) {
-            return json!({"ok": false, "error": "invalid key"});
+            return Ok(json!({"ok": false, "error": "invalid key"}));
         }
-        let paths = self.paths().await;
+        let paths = self.paths().await?;
         let path = if file == "game" {
             paths.game
         } else {
             paths.gus
         };
         if path.is_empty() {
-            return json!({"ok": false, "error": "config file not found"});
+            return Ok(json!({"ok": false, "error": "config file not found"}));
         }
         let val = ascii_safe(&value.replace(['\r', '\n'], ""));
         let section = if file == "game" {
@@ -674,10 +674,10 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(15_000))
-            .await;
+            .await?;
         self.caches.lock().expect("lock").cfg = None;
         let out = if r.out.is_empty() { &r.err } else { &r.out };
-        json!({"ok": r.out.contains("OK"), "output": js_trim(out), "path": path})
+        Ok(json!({"ok": r.out.contains("OK"), "output": js_trim(out), "path": path}))
     }
 
     pub async fn read_platforms(&self) -> Map<String, Value> {
@@ -688,7 +688,8 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(12_000))
-            .await;
+            .await
+            .unwrap_or_default();
         static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let re = R.get_or_init(|| {
             Regex::new(r"-[Ss][Ee][Rr][Vv][Ee][Rr][Pp][Ll][Aa][Tt][Ff][Oo][Rr][Mm]=([A-Za-z0-9+]+)")
@@ -712,7 +713,7 @@ impl ArkInstance {
     }
 
     /// Which platforms may join, as the launch argument `-ServerPlatform=PC+XSX+...` (applies on next restart).
-    pub async fn set_platforms(&self, list: &Value) -> Value {
+    pub async fn set_platforms(&self, list: &Value) -> Result<Value, String> {
         let valid: Vec<String> = match list {
             Value::Array(a) => a
                 .iter()
@@ -740,21 +741,27 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(15_000))
-            .await;
+            .await?;
         self.caches.lock().expect("lock").cfg = None;
         let out = if r.out.is_empty() { &r.err } else { &r.out };
-        json!({"ok": r.out.contains("OK"), "output": js_trim(out), "platform": arg})
+        Ok(json!({"ok": r.out.contains("OK"), "output": js_trim(out), "platform": arg}))
     }
 
     /// Settings summary (multipliers, rules, session name), cached for 60 s.
-    pub async fn config_summary(&self) -> Value {
+    pub async fn config_summary(&self) -> Result<Value, String> {
         if let Some((v, at)) = self.caches.lock().expect("lock").cfg.clone()
             && now_ms() - at < 60_000.0
         {
-            return v;
+            return Ok(v);
         }
-        let c = self.read_config("gus").await;
-        let cg = self.read_config("game").await;
+        let c = self
+            .read_config("gus")
+            .await
+            .unwrap_or_else(|_| json!({"ok": false, "ini": ""}));
+        let cg = self
+            .read_config("game")
+            .await
+            .unwrap_or_else(|_| json!({"ok": false, "ini": ""}));
         let readable = |r: &Value| {
             r.get("ok") != Some(&Value::Bool(false))
                 && r.get("ini")
@@ -844,10 +851,10 @@ impl ArkInstance {
             })
         };
         self.caches.lock().expect("lock").cfg = Some((value.clone(), now_ms()));
-        value
+        Ok(value)
     }
 
-    pub async fn update_check(&self) -> Value {
+    pub async fn update_check(&self) -> Result<Value, String> {
         let mf = format!(
             "{}/server-files/steamapps/appmanifest_2430930.acf",
             self.dir
@@ -862,27 +869,34 @@ impl ArkInstance {
                 ),
                 ShellOpts::user(&self.user),
             )
-            .await;
+            .await?;
         let installed = r1.out.trim().split('\n').next().unwrap_or("").to_string();
         let script = format!(
             "{} +login anonymous +app_info_update 1 +app_info_print 2430930 +quit 2>/dev/null | tr -d '\\t' | awk '/\"public\"/{{f=1}} f&&/\"buildid\"/{{print; exit}}' | grep -oE '[0-9]+' | head -1",
             shq(&sc)
         );
-        let r2 = self
+        let (latest, latest_err) = match self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(90_000))
-            .await;
-        let latest = r2.out.trim().split('\n').next().unwrap_or("").to_string();
-        json!({
-            "ok": true, "appId": "2430930", "installed": installed, "latest": latest, "latestErr": null,
+            .await
+        {
+            Ok(r2) => (
+                r2.out.trim().split('\n').next().unwrap_or("").to_string(),
+                Value::Null,
+            ),
+            Err(_) => (String::new(), json!("SteamCMD query timed out")),
+        };
+        Ok(json!({
+            "ok": true, "appId": "2430930", "installed": installed, "latest": latest, "latestErr": latest_err,
             "updateAvailable": !installed.is_empty() && !latest.is_empty() && installed != latest,
-        })
+        }))
     }
 
-    pub async fn apply_update(&self) -> Value {
-        self.rcon("Broadcast Server update starting \u{2014} saving and restarting shortly")
+    pub async fn apply_update(&self) -> Result<Value, String> {
+        let _ = self
+            .rcon("Broadcast Server update starting \u{2014} saving and restarting shortly")
             .await;
-        self.rcon("SaveWorld").await;
+        let _ = self.rcon("SaveWorld").await;
         let script = format!(
             "systemctl stop {s}; runuser -u {u} -- bash -lc 'cd {d} && ./ark-manager.sh update' ; systemctl start {s}",
             s = self.service,
@@ -898,11 +912,11 @@ impl ArkInstance {
                 ),
                 ShellOpts::default().timeout(15_000),
             )
-            .await;
-        json!({"ok": r.out.contains("STARTED"), "output": js_trim(&r.out)})
+            .await?;
+        Ok(json!({"ok": r.out.contains("STARTED"), "output": js_trim(&r.out)}))
     }
 
-    async fn ensure_backup_helper(&self) -> String {
+    async fn ensure_backup_helper(&self) -> Result<String, String> {
         let path = format!("{}/dashboard-backup.sh", self.dir);
         let done = self.caches.lock().expect("lock").bk_helper;
         if !done {
@@ -917,14 +931,14 @@ impl ArkInstance {
                         .input(ascii_safe(BACKUP_HELPER))
                         .timeout(15_000),
                 )
-                .await;
+                .await?;
             self.caches.lock().expect("lock").bk_helper = true;
         }
-        path
+        Ok(path)
     }
 
-    pub async fn create_backup(&self) -> Value {
-        let helper = self.ensure_backup_helper().await;
+    pub async fn create_backup(&self) -> Result<Value, String> {
+        let helper = self.ensure_backup_helper().await?;
         let script = format!(
             "runuser -u {} -- bash {} {} {} {} 2>&1 | tail -3",
             self.user,
@@ -936,14 +950,14 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::default().timeout(120_000))
-            .await;
+            .await?;
         let out = js_trim(&r.out).to_string();
-        json!({"ok": out.contains("OK saved="), "output": out})
+        Ok(json!({"ok": out.contains("OK saved="), "output": out}))
     }
 
-    pub async fn restore_backup(&self, name: &str) -> Value {
+    pub async fn restore_backup(&self, name: &str) -> Result<Value, String> {
         if !valid_snapshot(name) {
-            return json!({"ok": false, "error": "invalid snapshot name"});
+            return Ok(json!({"ok": false, "error": "invalid snapshot name"}));
         }
         let bk = format!("{}/backups", self.map_dir());
         let saved = format!("{}/server-files/ShooterGame/Saved", self.dir);
@@ -966,14 +980,14 @@ impl ArkInstance {
                 ),
                 ShellOpts::default().timeout(15_000),
             )
-            .await;
-        json!({"ok": r.out.contains("STARTED"), "output": js_trim(&r.out)})
+            .await?;
+        Ok(json!({"ok": r.out.contains("STARTED"), "output": js_trim(&r.out)}))
     }
 
-    pub async fn backups_list(&self) -> Value {
-        let backups = self.paths().await.backups;
+    pub async fn backups_list(&self) -> Result<Value, String> {
+        let backups = self.paths().await?.backups;
         if backups.is_empty() {
-            return json!({"ok": true, "backups": []});
+            return Ok(json!({"ok": true, "backups": []}));
         }
         let b = shq(&backups);
         let script = format!(
@@ -982,7 +996,7 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user))
-            .await;
+            .await?;
         let list: Vec<Value> = r
             .out
             .split('\n')
@@ -1005,16 +1019,16 @@ impl ArkInstance {
                 json!({"name": name, "size": size, "when": when, "trigger": trigger})
             })
             .collect();
-        json!({"ok": true, "dir": backups, "backups": list})
+        Ok(json!({"ok": true, "dir": backups, "backups": list}))
     }
 
-    pub async fn delete_backup(&self, name: &str) -> Value {
+    pub async fn delete_backup(&self, name: &str) -> Result<Value, String> {
         if !valid_snapshot(name) {
-            return json!({"ok": false, "error": "invalid snapshot name"});
+            return Ok(json!({"ok": false, "error": "invalid snapshot name"}));
         }
-        let backups = self.paths().await.backups;
+        let backups = self.paths().await?.backups;
         if backups.is_empty() {
-            return json!({"ok": false, "error": "backup dir not found"});
+            return Ok(json!({"ok": false, "error": "backup dir not found"}));
         }
         let r = self
             .exec
@@ -1025,13 +1039,13 @@ impl ArkInstance {
                 ),
                 ShellOpts::user(&self.user).timeout(15_000),
             )
-            .await;
-        json!({"ok": r.out.contains("DELETED"), "output": js_trim(&r.out)})
+            .await?;
+        Ok(json!({"ok": r.out.contains("DELETED"), "output": js_trim(&r.out)}))
     }
 
-    async fn set_map_conf_key(&self, key: &str, value: &str) -> bool {
+    async fn set_map_conf_key(&self, key: &str, value: &str) -> Result<bool, String> {
         if !valid_name(key) {
-            return false;
+            return Ok(false);
         }
         let val = ascii_safe(&value.replace(['\r', '\n'], ""));
         let script = format!(
@@ -1043,8 +1057,8 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user).timeout(15_000))
-            .await;
-        r.out.contains("OK")
+            .await?;
+        Ok(r.out.contains("OK"))
     }
 
     /// Session name and admin/server passwords (`sessionName`, `adminPassword`, `serverPassword`).
@@ -1053,7 +1067,7 @@ impl ArkInstance {
         session_name: Option<&Value>,
         admin_pw: Option<&Value>,
         server_pw: Option<&Value>,
-    ) -> Value {
+    ) -> Result<Value, String> {
         let mut changed: Vec<&str> = Vec::new();
         let mut failed: Vec<&str> = Vec::new();
         let given = |v: Option<&Value>, trim: bool| -> Option<String> {
@@ -1071,15 +1085,15 @@ impl ArkInstance {
             }
         };
         if let Some(n) = given(session_name, true) {
-            if is_json_ok(&self.set_config_key("SessionName", &n, "gus").await) {
+            if is_json_ok(&self.set_config_key("SessionName", &n, "gus").await?) {
                 changed.push("name")
             } else {
                 failed.push("name")
             }
         }
         if let Some(p) = given(admin_pw, false) {
-            let a = self.set_map_conf_key("AdminPassword", &p).await;
-            let b = is_json_ok(&self.set_config_key("ServerAdminPassword", &p, "gus").await);
+            let a = self.set_map_conf_key("AdminPassword", &p).await?;
+            let b = is_json_ok(&self.set_config_key("ServerAdminPassword", &p, "gus").await?);
             if a && b {
                 changed.push("adminPassword")
             } else {
@@ -1087,8 +1101,8 @@ impl ArkInstance {
             }
         }
         if let Some(p) = given(server_pw, false) {
-            let a = self.set_map_conf_key("ServerPassword", &p).await;
-            let b = is_json_ok(&self.set_config_key("ServerPassword", &p, "gus").await);
+            let a = self.set_map_conf_key("ServerPassword", &p).await?;
+            let b = is_json_ok(&self.set_config_key("ServerPassword", &p, "gus").await?);
             if a && b {
                 changed.push("serverPassword")
             } else {
@@ -1097,20 +1111,20 @@ impl ArkInstance {
         }
         self.caches.lock().expect("lock").cfg = None;
         if changed.is_empty() && failed.is_empty() {
-            return json!({"ok": false, "error": "nothing to change", "changed": []});
+            return Ok(json!({"ok": false, "error": "nothing to change", "changed": []}));
         }
         if !failed.is_empty() {
-            return json!({"ok": false, "error": format!("failed to write: {}", failed.join(", ")), "changed": changed, "failed": failed});
+            return Ok(json!({"ok": false, "error": format!("failed to write: {}", failed.join(", ")), "changed": changed, "failed": failed}));
         }
-        json!({"ok": true, "changed": changed, "note": "applies on next restart"})
+        Ok(json!({"ok": true, "changed": changed, "note": "applies on next restart"}))
     }
 
-    pub async fn schedule(&self) -> Value {
+    pub async fn schedule(&self) -> Result<Value, String> {
         let script = "crontab -l 2>/dev/null | grep -vE '^\\s*#' | grep -iE 'ark-manager|ark|healthcheck' | head -30";
         let r = self
             .exec
             .guest_shell(script, ShellOpts::user(&self.user))
-            .await;
+            .await?;
         static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         let re =
             R.get_or_init(|| Regex::new(r"^(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(.*)$").expect("re"));
@@ -1147,12 +1161,12 @@ impl ArkInstance {
                 json!({"cron": cron, "cmd": slice_units(&cut, 80), "type": ty})
             })
             .collect();
-        json!({"ok": true, "jobs": jobs})
+        Ok(json!({"ok": true, "jobs": jobs}))
     }
 
-    async fn ensure_rate_helper(&self) {
+    async fn ensure_rate_helper(&self) -> Result<(), String> {
         if self.caches.lock().expect("lock").rate_helper {
-            return;
+            return Ok(());
         }
         let path = format!("{}/dashboard-set-rate.sh", self.dir);
         self.exec
@@ -1166,8 +1180,9 @@ impl ArkInstance {
                     .input(ascii_safe(RATE_HELPER))
                     .timeout(15_000),
             )
-            .await;
+            .await?;
         self.caches.lock().expect("lock").rate_helper = true;
+        Ok(())
     }
 
     /// Add a scheduled task to the crontab. `extra` holds `key,value,file,restart,endCron,revertValue,rates`.
@@ -1177,7 +1192,7 @@ impl ArkInstance {
         cron: Option<&Value>,
         message: Option<&Value>,
         extra: &Map<String, Value>,
-    ) -> Value {
+    ) -> Result<Value, String> {
         let cron_s = js_str_opt_local(cron);
         let clean = |m: Option<&Value>| -> String {
             let raw = if truthy(m) {
@@ -1189,7 +1204,7 @@ impl ArkInstance {
         };
         let msg = clean(message);
         if !ok_cron(&cron_s) {
-            return json!({"ok": false, "error": "invalid cron (need 5 fields)"});
+            return Ok(json!({"ok": false, "error": "invalid cron (need 5 fields)"}));
         }
         let tt = task_type.and_then(Value::as_str).unwrap_or("");
         let mut lines: Vec<String> = Vec::new();
@@ -1229,13 +1244,13 @@ impl ArkInstance {
                     _ => "1.0".to_string(),
                 };
                 if !valid_name(&key) {
-                    return json!({"ok": false, "error": format!("invalid multiplier key: {}", if key.is_empty() { "(empty)" } else { &key })});
+                    return Ok(json!({"ok": false, "error": format!("invalid multiplier key: {}", if key.is_empty() { "(empty)" } else { &key })}));
                 }
                 if !num_re_ok(&val) {
-                    return json!({"ok": false, "error": format!("invalid value for {key}")});
+                    return Ok(json!({"ok": false, "error": format!("invalid value for {key}")}));
                 }
                 if !num_re_ok(&rev) {
-                    return json!({"ok": false, "error": format!("invalid revert value for {key}")});
+                    return Ok(json!({"ok": false, "error": format!("invalid revert value for {key}")}));
                 }
                 rates.push(Rate {
                     key,
@@ -1245,9 +1260,9 @@ impl ArkInstance {
                 });
             }
             if rates.is_empty() {
-                return json!({"ok": false, "error": "no rates given"});
+                return Ok(json!({"ok": false, "error": "no rates given"}));
             }
-            self.ensure_rate_helper().await;
+            self.ensure_rate_helper().await?;
             let restart = if truthy(extra.get("restart")) {
                 format!(" ; ./ark-manager.sh restart {}", self.display)
             } else {
@@ -1289,7 +1304,7 @@ impl ArkInstance {
                 }
             }
         } else if tt == "backup" {
-            let helper = self.ensure_backup_helper().await;
+            let helper = self.ensure_backup_helper().await?;
             lines.push(format!(
                 "{} bash {helper} {md} {dir}/server-files {} scheduled",
                 js_trim(&cron_s),
@@ -1302,7 +1317,7 @@ impl ArkInstance {
                 "broadcast" => {
                     format!("./ark-manager.sh rcon {} \"Broadcast {msg}\"", self.display)
                 }
-                _ => return json!({"ok": false, "error": "unknown task type"}),
+                _ => return Ok(json!({"ok": false, "error": "unknown task type"})),
             };
             lines.push(format!("{} cd {dir} && {cmd}", js_trim(&cron_s)));
         }
@@ -1329,18 +1344,18 @@ impl ArkInstance {
         let r = self
             .exec
             .guest_shell(&script, ShellOpts::user(&self.user))
-            .await;
-        json!({"ok": r.out.contains("ADDED"), "verified": r.out.contains("VERIFIED"), "lines": lines})
+            .await?;
+        Ok(json!({"ok": r.out.contains("ADDED"), "verified": r.out.contains("VERIFIED"), "lines": lines}))
     }
 
-    pub async fn delete_schedule(&self, m: Option<&Value>) -> Value {
+    pub async fn delete_schedule(&self, m: Option<&Value>) -> Result<Value, String> {
         let s = if truthy(m) {
             js_str_opt_local(m)
         } else {
             String::new()
         };
         if !truthy(m) || s.encode_utf16().count() < 4 {
-            return json!({"ok": false, "error": "bad match"});
+            return Ok(json!({"ok": false, "error": "bad match"}));
         }
         let r = self
             .exec
@@ -1351,8 +1366,8 @@ impl ArkInstance {
                 ),
                 ShellOpts::user(&self.user),
             )
-            .await;
-        json!({"ok": r.out.contains("DELETED")})
+            .await?;
+        Ok(json!({"ok": r.out.contains("DELETED")}))
     }
 }
 
@@ -1444,7 +1459,7 @@ pub fn parse_discovery(out: &str) -> Vec<DiscoveredMap> {
     maps
 }
 
-pub async fn discover_maps(exec: &Arc<dyn Exec>, cfg: &ArkCfg) -> Vec<DiscoveredMap> {
+pub async fn discover_maps(exec: &Arc<dyn Exec>, cfg: &ArkCfg) -> Result<Vec<DiscoveredMap>, String> {
     let dir = cfg.dir();
     let script = format!(
         "for d in {}/maps/*/; do n=$(basename \"$d\"); [ -f \"$d/map.conf\" ] || continue; echo \"===MAP:$n===\"; cat \"$d/map.conf\" 2>/dev/null; done",
@@ -1452,27 +1467,27 @@ pub async fn discover_maps(exec: &Arc<dyn Exec>, cfg: &ArkCfg) -> Vec<Discovered
     );
     let r = exec
         .guest_shell(&script, ShellOpts::user(&cfg.user).timeout(20_000))
-        .await;
-    parse_discovery(&r.out)
+        .await?;
+    Ok(parse_discovery(&r.out))
 }
 
 /// Create a map by writing its files in small steps (content over stdin, passwords never in argv).
-pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Value>) -> Value {
+pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Value>) -> Result<Value, String> {
     let dir = cfg.dir();
     let display_v = o.get("display");
     let display = js_str_opt_local(display_v);
     let internal = js_str_opt_local(o.get("internal"));
     if !valid_name(&display) {
-        return json!({"ok": false, "error": "invalid display name (letters/numbers/underscore only)"});
+        return Ok(json!({"ok": false, "error": "invalid display name (letters/numbers/underscore only)"}));
     }
     if !truthy(o.get("internal")) {
-        return json!({"ok": false, "error": "internal map name required"});
+        return Ok(json!({"ok": false, "error": "internal map name required"}));
     }
     if !valid_name(&internal) {
-        return json!({"ok": false, "error": "invalid internal map name (letters/numbers/underscore only)"});
+        return Ok(json!({"ok": false, "error": "invalid internal map name (letters/numbers/underscore only)"}));
     }
     if !truthy(o.get("adminPassword")) {
-        return json!({"ok": false, "error": "admin password required"});
+        return Ok(json!({"ok": false, "error": "admin password required"}));
     }
     let mut ports = [0i64; 4];
     for (i, (nm, hi)) in [
@@ -1486,7 +1501,7 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
     {
         let v = js_number(o.get(*nm));
         if !(v.is_finite() && v.fract() == 0.0 && v >= 1.0 && v <= *hi) {
-            return json!({"ok": false, "error": format!("invalid {nm}")});
+            return Ok(json!({"ok": false, "error": format!("invalid {nm}")}));
         }
         ports[i] = v as i64;
     }
@@ -1510,9 +1525,9 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
             &format!("[ -d {} ] && echo EXISTS || echo OK", shq(&md)),
             ShellOpts::user(&u),
         )
-        .await;
+        .await?;
     if chk.out.contains("EXISTS") {
-        return json!({"ok": false, "error": "map already exists"});
+        return Ok(json!({"ok": false, "error": "map already exists"}));
     }
     let write_file = |path: String, content: String| {
         let exec = exec.clone();
@@ -1531,7 +1546,7 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
         &format!("mkdir -p {}/backups", shq(&md)),
         ShellOpts::user(&u),
     )
-    .await;
+    .await?;
 
     let raw = |k: &str| js_str_opt_local(o.get(k));
     let map_conf = format!(
@@ -1541,18 +1556,18 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
         raw("rconPort"),
         raw("maxPlayers")
     );
-    write_file(format!("{md}/map.conf"), map_conf).await;
+    write_file(format!("{md}/map.conf"), map_conf).await?;
     exec.guest_shell(
         &format!("chmod 600 {}/map.conf", shq(&md)),
         ShellOpts::user(&u),
     )
-    .await;
+    .await?;
     write_file(
         format!("{md}/mods.conf"),
         format!("# Mod configuration for {display}\n# Format: id|name|enabled\n"),
     )
-    .await;
-    write_file(format!("{md}/Game.ini"), String::new()).await;
+    .await?;
+    write_file(format!("{md}/Game.ini"), String::new()).await?;
 
     // GUS: use an existing map's file as template
     let src = exec
@@ -1563,7 +1578,7 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
             ),
             ShellOpts::user(&u).timeout(15_000),
         )
-        .await;
+        .await?;
     let mut gus = if src.out.is_empty() {
         "[ServerSettings]\nRCONEnabled=True\n".to_string()
     } else {
@@ -1614,13 +1629,13 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
             lines.insert(idx + 1, format!("{k}={v}"));
         }
     }
-    write_file(format!("{md}/GameUserSettings.ini"), lines.join("\n")).await;
+    write_file(format!("{md}/GameUserSettings.ini"), lines.join("\n")).await?;
 
     exec.guest_shell(
         &format!("MC={}/config/maps.conf; grep -q \"^{display}|\" \"$MC\" 2>/dev/null || echo \"{display}|{internal}|enabled\" >> \"$MC\"", shq(&dir)),
         ShellOpts::user(&u),
     )
-    .await;
+    .await?;
 
     let svc = format!("ark-{}.service", display.to_lowercase());
     let svc_body = format!(
@@ -1631,20 +1646,20 @@ pub async fn create_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, o: &Map<String, Valu
         &["/bin/sh", "-c", &format!("cat > /etc/systemd/system/{svc}")],
         ShellOpts::default().input(svc_body).timeout(15_000),
     )
-    .await;
+    .await?;
     let rs = exec
         .guest_shell(
             &format!("systemctl daemon-reload; systemctl enable {svc} 2>/dev/null; command -v ufw >/dev/null && {{ ufw allow {gp}/udp; ufw allow {qp}/udp; ufw allow {rp}/tcp; }} 2>/dev/null; echo SVCOK"),
             ShellOpts::default().timeout(20_000),
         )
-        .await;
-    json!({"ok": rs.out.contains("SVCOK"), "display": display, "service": svc, "output": js_trim(&rs.out)})
+        .await?;
+    Ok(json!({"ok": rs.out.contains("SVCOK"), "display": display, "service": svc, "output": js_trim(&rs.out)}))
 }
 
 /// Stop and remove a map: service, unit file, firewall rules, directory and maps.conf entry.
-pub async fn delete_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, display: &str) -> Value {
+pub async fn delete_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, display: &str) -> Result<Value, String> {
     if !valid_name(display) {
-        return json!({"ok": false, "error": "invalid map name"});
+        return Ok(json!({"ok": false, "error": "invalid map name"}));
     }
     let dir = cfg.dir();
     let svc = format!("ark-{}.service", display.to_lowercase());
@@ -1658,8 +1673,8 @@ pub async fn delete_map(exec: &Arc<dyn Exec>, cfg: &ArkCfg, display: &str) -> Va
     );
     let r = exec
         .guest_shell(&script, ShellOpts::default().timeout(20_000))
-        .await;
-    json!({"ok": r.out.contains("DELETED"), "output": js_trim(&r.out)})
+        .await?;
+    Ok(json!({"ok": r.out.contains("DELETED"), "output": js_trim(&r.out)}))
 }
 
 #[cfg(test)]
@@ -1680,7 +1695,7 @@ mod tests {
 
     async fn island() -> (Arc<dyn Exec>, ArkInstance) {
         let exec: Arc<dyn Exec> = Arc::new(FakeVm::new(false));
-        let maps = discover_maps(&exec, &cfg()).await;
+        let maps = discover_maps(&exec, &cfg()).await.expect("exec");
         let m = maps
             .iter()
             .find(|m| m.display == "TheIsland")
@@ -1693,7 +1708,7 @@ mod tests {
     #[tokio::test]
     async fn discovery_drops_hostile_names() {
         let exec: Arc<dyn Exec> = Arc::new(FakeVm::new(false));
-        let maps = discover_maps(&exec, &cfg()).await;
+        let maps = discover_maps(&exec, &cfg()).await.expect("exec");
         assert_eq!(
             maps.iter().map(|m| m.display.as_str()).collect::<Vec<_>>(),
             ["Ragnarok", "TheIsland"]
@@ -1718,25 +1733,25 @@ mod tests {
     #[tokio::test]
     async fn rcon_lists_players_and_survives_a_rotated_password() {
         let (_e, ark) = island().await;
-        let p = ark.players().await;
+        let p = ark.players().await.expect("exec");
         assert_eq!(p["players"].as_array().map(Vec::len), Some(2));
         assert_eq!(p["players"][0]["name"], "Alice");
         // rotate the password behind the cached one: the next call re-reads map.conf once
         assert!(is_json_ok(
             &ark.update_settings(None, Some(&json!("new-pw")), None)
-                .await
+                .await.expect("exec")
         ));
-        let r = ark.rcon("SaveWorld").await;
+        let r = ark.rcon("SaveWorld").await.expect("exec");
         assert_eq!(r["ok"], true);
     }
 
     #[tokio::test]
     async fn rcon_on_a_stopped_map_reports_connection_error() {
         let exec: Arc<dyn Exec> = Arc::new(FakeVm::new(false));
-        let maps = discover_maps(&exec, &cfg()).await;
+        let maps = discover_maps(&exec, &cfg()).await.expect("exec");
         let m = maps.iter().find(|m| m.display == "Ragnarok").expect("map");
         let ark = ArkInstance::new(exec, &cfg(), m).expect("ark");
-        let r = ark.rcon("ListPlayers").await;
+        let r = ark.rcon("ListPlayers").await.expect("exec");
         assert_eq!(r["ok"], false);
         assert!(
             r["error"]
@@ -1752,20 +1767,20 @@ mod tests {
         // 8 GB is above the 6 GB the world uses right now (x1.15 = 6.9): allowed
         let r = ark
             .set_resources(Some(&json!(2)), Some(&json!(8)), 4.0, 14.0)
-            .await;
+            .await.expect("exec");
         assert_eq!(r["ok"], true);
-        assert_eq!(ark.resources().await["ramGB"], 8);
+        assert_eq!(ark.resources().await.expect("exec")["ramGB"], 8);
         // 2 GB would make the cgroup OOM-kill a running world: refused
-        let g = ark.set_resources(None, Some(&json!(2)), 4.0, 14.0).await;
+        let g = ark.set_resources(None, Some(&json!(2)), 4.0, 14.0).await.expect("exec");
         assert_eq!(g["needsForce"], true);
     }
 
     #[tokio::test]
     async fn config_key_edit_and_redaction() {
         let (_e, ark) = island().await;
-        let r = ark.set_config_key("XPMultiplier", "4.5", "gus").await;
+        let r = ark.set_config_key("XPMultiplier", "4.5", "gus").await.expect("exec");
         assert_eq!(r["ok"], true);
-        let ini = ark.read_config("gus").await;
+        let ini = ark.read_config("gus").await.expect("exec");
         assert!(
             ini["ini"]
                 .as_str()
@@ -1779,7 +1794,7 @@ mod tests {
                 .contains("ServerAdminPassword=\u{2022}")
         );
         assert_eq!(
-            ark.set_config_key("bad key", "1", "gus").await["error"],
+            ark.set_config_key("bad key", "1", "gus").await.expect("exec")["error"],
             "invalid key"
         );
     }
@@ -1795,7 +1810,7 @@ mod tests {
                 None,
                 &none,
             )
-            .await;
+            .await.expect("exec");
         assert_eq!(bad["error"], "invalid cron (need 5 fields)");
         let ok = ark
             .add_schedule(
@@ -1804,12 +1819,12 @@ mod tests {
                 None,
                 &none,
             )
-            .await;
+            .await.expect("exec");
         assert_eq!(ok["ok"], true);
-        assert_eq!(ok["verified"], true);
+        assert_eq!(ok["verified"], true, "{ok}");
         let unk = ark
             .add_schedule(Some(&json!("nuke")), Some(&json!("0 0 * * *")), None, &none)
-            .await;
+            .await.expect("exec");
         assert_eq!(unk["error"], "unknown task type");
     }
 

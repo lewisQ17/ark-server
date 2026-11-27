@@ -8,8 +8,35 @@ pub enum Mode {
     Local,
     /// In-memory fake VM. For recording, replay and tests only.
     Fake,
-    /// Proxmox guest agent. Not ported to Rust.
+    /// Proxmox guest agent over the PVE API (`proxmox.rs`).
     Proxmox,
+}
+
+/// Proxmox connection (`config.proxmox`). Host, node and vmid are mandatory; the certificate pin too
+/// unless `tls_insecure` is set.
+#[derive(Debug, Clone, Default)]
+pub struct Pve {
+    pub host: String,
+    pub port: u16,
+    pub node: String,
+    pub vmid: i64,
+    pub user: String,
+    pub password: String,
+    pub tls_fingerprint: String,
+    pub tls_insecure: bool,
+}
+
+/// UniFi/UDM WAN port-forward management (`config.unifi`).
+#[derive(Debug, Clone, Default)]
+pub struct UnifiCfg {
+    pub enabled: bool,
+    pub host: String,
+    pub api_key: String,
+    pub site: String,
+    pub ark_vm_ip: String,
+    pub proto: String,
+    pub tls_fingerprint: String,
+    pub tls_insecure: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -55,10 +82,14 @@ pub struct Config {
     pub auth: Auth,
     pub run_as_user: String,
     pub allow_host_power: bool,
-    pub pve_vmid: i64,
+    pub pve: Pve,
+    pub unifi: UnifiCfg,
+    /// `TRUSTED_PROXIES`: peers whose X-Forwarded-For / CF-Connecting-IP is believed.
+    pub trusted_proxies: Vec<String>,
+    /// `ALLOWED_ORIGINS`: extra Origins allowed on POST/PUT/PATCH/DELETE.
+    pub allowed_origins: Vec<String>,
     pub leak_guard: LeakGuard,
     pub ark: ArkCfg,
-    pub unifi_enabled: bool,
     pub poll_interval_ms: u64,
     pub discover_every_n: u64,
     pub hist_len: usize,
@@ -103,14 +134,45 @@ impl Config {
             "fake" => Mode::Fake,
             _ => Mode::Local,
         };
+        let pve = Pve {
+            host: get("PVE_HOST").unwrap_or_default(),
+            port: u16::try_from(int("PVE_PORT", 8006)).map_err(|_| "PVE_PORT out of range".to_string())?,
+            node: get("PVE_NODE").unwrap_or_default(),
+            vmid: int("PVE_VMID", 0),
+            user: or("PVE_USER", "root@pam"),
+            password: get("PVE_PASSWORD").unwrap_or_default(),
+            tls_fingerprint: get("PVE_TLS_FINGERPRINT").unwrap_or_default(),
+            tls_insecure: get("PVE_TLS_INSECURE").as_deref() == Some("1"),
+        };
         if mode == Mode::Proxmox {
-            return Err("ARK_EXEC_MODE=proxmox is not ported to Rust yet (proxmox.js); use the Node backend for it, or ARK_EXEC_MODE=local on the game machine.".into());
+            let missing: Vec<&str> = [
+                ("PVE_HOST", s("PVE_HOST").is_none()),
+                ("PVE_NODE", s("PVE_NODE").is_none()),
+                ("PVE_VMID", s("PVE_VMID").is_none_or(|v| v == "0")),
+            ]
+            .iter()
+            .filter(|(_, m)| *m)
+            .map(|(k, _)| *k)
+            .collect();
+            if !missing.is_empty() {
+                return Err(format!(
+                    "ARK_EXEC_MODE=proxmox needs {} in the environment. Copy .env.example to .env and fill in your own Proxmox host/node/VM id.",
+                    missing.join(", ")
+                ));
+            }
         }
-        let unifi_enabled =
-            s("UNIFI_API_KEY").is_some() && s("UNIFI_HOST").is_some() && s("ARK_VM_IP").is_some();
-        if unifi_enabled {
-            return Err("UniFi port-forward management (unifi.js) is not ported to Rust yet; unset UNIFI_API_KEY/UNIFI_HOST/ARK_VM_IP.".into());
-        }
+        let unifi = UnifiCfg {
+            enabled: s("UNIFI_API_KEY").is_some()
+                && s("UNIFI_HOST").is_some()
+                && s("ARK_VM_IP").is_some(),
+            host: get("UNIFI_HOST").unwrap_or_default(),
+            api_key: get("UNIFI_API_KEY").unwrap_or_default(),
+            site: or("UNIFI_SITE", "default"),
+            ark_vm_ip: get("ARK_VM_IP").unwrap_or_default(),
+            proto: or("UNIFI_FORWARD_PROTO", "udp"),
+            tls_fingerprint: get("UNIFI_TLS_FINGERPRINT").unwrap_or_default(),
+            tls_insecure: get("UNIFI_TLS_INSECURE").as_deref() == Some("1"),
+        };
         let user = or("ARK_USER", "arkadmin");
         Ok(Config {
             port: u16::try_from(int("PORT", 8787)).map_err(|_| "PORT out of range".to_string())?,
@@ -123,7 +185,10 @@ impl Config {
             },
             run_as_user: user.clone(),
             allow_host_power: get("ALLOW_HOST_POWER").as_deref() == Some("1"),
-            pve_vmid: int("PVE_VMID", 0),
+            pve,
+            unifi,
+            trusted_proxies: crate::security::parse_list(&get("TRUSTED_PROXIES").unwrap_or_default()),
+            allowed_origins: crate::security::parse_list(&get("ALLOWED_ORIGINS").unwrap_or_default()),
             leak_guard: LeakGuard {
                 enabled: get("ARK_LEAK_GUARD").as_deref() != Some("0"),
                 ram_gb: flt("ARK_LEAK_GUARD_GB", 12.0),
@@ -138,14 +203,13 @@ impl Config {
                 cores_total: int("PVE_VM_CORES", 4),
                 rcon_password_override: get("ARK_RCON_PASSWORD").unwrap_or_default(),
             },
-            unifi_enabled,
             poll_interval_ms: u64::try_from(int("POLL_INTERVAL_MS", 6000))
                 .unwrap_or(6000)
                 .max(1),
             discover_every_n: 5,
             hist_len: 44,
             frontend_dir: s("ARK_FRONTEND_DIR").unwrap_or_else(|| {
-                format!("{}/../../dashboard/frontend", env!("CARGO_MANIFEST_DIR"))
+                format!("{}/../frontend", env!("CARGO_MANIFEST_DIR"))
             }),
         })
     }
@@ -177,16 +241,25 @@ mod tests {
     }
 
     #[test]
-    fn proxmox_and_unifi_are_refused_not_ignored() {
-        assert!(cfg(&[("PVE_PASSWORD", "x")]).is_err());
-        assert!(
-            cfg(&[
-                ("UNIFI_API_KEY", "k"),
-                ("UNIFI_HOST", "h"),
-                ("ARK_VM_IP", "i")
-            ])
-            .is_err()
-        );
+    fn proxmox_mode_needs_host_node_and_vmid() {
+        let e = cfg(&[("ARK_EXEC_MODE", "proxmox")]).expect_err("incomplete");
+        assert!(e.contains("PVE_HOST, PVE_NODE, PVE_VMID"), "{e}");
+        let c = cfg(&[
+            ("PVE_PASSWORD", "x"),
+            ("PVE_HOST", "h"),
+            ("PVE_NODE", "n"),
+            ("PVE_VMID", "100"),
+        ])
+        .expect("auto-detected proxmox");
+        assert_eq!((c.mode, c.pve.vmid, c.pve.port), (Mode::Proxmox, 100, 8006));
+    }
+
+    #[test]
+    fn unifi_needs_all_three() {
+        assert!(!cfg(&[("UNIFI_API_KEY", "k"), ("UNIFI_HOST", "h")]).expect("cfg").unifi.enabled);
+        let c = cfg(&[("UNIFI_API_KEY", "k"), ("UNIFI_HOST", "h"), ("ARK_VM_IP", "i")]).expect("cfg");
+        assert!(c.unifi.enabled);
+        assert_eq!((c.unifi.site.as_str(), c.unifi.proto.as_str()), ("default", "udp"));
     }
 
     #[test]

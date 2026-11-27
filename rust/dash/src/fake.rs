@@ -31,6 +31,8 @@ struct State {
 pub struct FakeVm {
     allow_host_power: bool,
     s: Mutex<State>,
+    /// When set, every call fails like a host that cannot be reached (tests of the failure paths).
+    down: Mutex<Option<String>>,
 }
 
 #[expect(
@@ -150,6 +152,19 @@ impl FakeVm {
         Self {
             allow_host_power,
             s: Mutex::new(initial()),
+            down: Mutex::new(None),
+        }
+    }
+
+    /// Make every following call fail with `reason` (`None` brings the host back).
+    pub fn set_down(&self, reason: Option<&str>) {
+        *self.down.lock().expect("down lock") = reason.map(str::to_string);
+    }
+
+    fn check_up(&self) -> Result<(), String> {
+        match &*self.down.lock().expect("down lock") {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
         }
     }
 }
@@ -663,11 +678,13 @@ impl FakeVm {
 
 #[async_trait]
 impl Exec for FakeVm {
-    async fn guest_shell(&self, script: &str, opts: ShellOpts) -> ExecOut {
-        self.run(script, opts.input.as_deref())
+    async fn guest_shell(&self, script: &str, opts: ShellOpts) -> Result<ExecOut, String> {
+        self.check_up()?;
+        Ok(self.run(script, opts.input.as_deref()))
     }
 
-    async fn guest_exec(&self, args: &[&str], opts: ShellOpts) -> ExecOut {
+    async fn guest_exec(&self, args: &[&str], opts: ShellOpts) -> Result<ExecOut, String> {
+        self.check_up()?;
         if let [bin, flag, script] = args
             && *bin == "/bin/sh"
             && *flag == "-c"
@@ -684,22 +701,24 @@ impl Exec for FakeVm {
                 .expect("fake vm lock")
                 .files
                 .insert(target, opts.input.unwrap_or_default());
-            return ok("");
+            return Ok(ok(""));
         }
-        ExecOut {
+        Ok(ExecOut {
             exitcode: 127,
             out: String::new(),
             err: "fake-vm: unsupported exec".into(),
-        }
+        })
     }
 
     async fn vm_status(&self) -> Result<Value, String> {
+        self.check_up()?;
         Ok(
             json!({"name": "fake-vm", "status": "running", "cpus": 4, "cpu": 0.25, "mem": 8e9, "maxmem": 16e9, "disk": 4e10, "maxdisk": 1e11, "uptime": 259_200}),
         )
     }
 
     async fn rrddata(&self) -> Result<Vec<Value>, String> {
+        self.check_up()?;
         Ok(vec![
             json!({"cpu": 0.25, "mem": 8e9, "maxmem": 16e9, "netin": 1000, "netout": 2000, "time": 1}),
         ])

@@ -146,12 +146,16 @@ apt-get install -y -qq --no-install-recommends \
 ok "Base packages installed"
 
 if (( WITH_DASHBOARD )); then
-	if ! command -v node >/dev/null 2>&1 || (( $(node -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1 || echo 0) < 20 )); then
-		note "Installing Node.js 22 (the dashboard needs 20+)…"
-		curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
-		apt-get install -y -qq nodejs >/dev/null
+	# The dashboard server is a Rust program (axum), built on this machine with a minimal rustup toolchain
+	# kept under /opt/rust so nothing lands in a home directory. Needs Rust 1.85+, hence rustup and not apt.
+	export RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo
+	if [[ ! -x "$CARGO_HOME/bin/cargo" ]]; then
+		note "Installing a minimal Rust toolchain for the dashboard (one-off, a few minutes)…"
+		apt-get install -y -qq --no-install-recommends build-essential pkg-config >/dev/null
+		curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --no-modify-path >/dev/null 2>&1 \
+			|| die "Could not install the Rust toolchain (needs internet access to sh.rustup.rs)."
 	fi
-	ok "Node.js $(node -v)"
+	ok "Rust $("$CARGO_HOME/bin/rustc" --version | cut -d' ' -f2)"
 fi
 
 step "Setting up the '${ARK_USER}' user"
@@ -258,8 +262,10 @@ if (( WITH_DASHBOARD )); then
 fi
 
 if (( WITH_DASHBOARD )); then
-	(cd "$DASH_DIR/backend" && npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1) \
-		|| die "npm install failed in ${DASH_DIR}/backend"
+	note "Building the dashboard server (cargo build --release, a few minutes)…"
+	(cd "$DASH_DIR/server" && RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo \
+		/opt/rust/cargo/bin/cargo build --release --locked >/dev/null 2>&1) \
+		|| die "cargo build failed in ${DASH_DIR}/server (run it by hand to see why)"
 
 	DASH_PASS="$(genpw 20)"
 	install -d -m 750 "$DASH_DIR/deploy"
@@ -268,6 +274,7 @@ if (( WITH_DASHBOARD )); then
 # Local mode: the dashboard runs on the same machine as the game server and
 # executes the manager directly. No Proxmox, no remote API.
 ARK_EXEC_MODE=local
+ARK_FRONTEND_DIR=${DASH_DIR}/frontend
 ARK_USER=${ARK_USER}
 ARK_MANAGER=${INSTALL_DIR}/ark-manager.sh
 PORT=${DASH_PORT}
@@ -300,9 +307,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=ark-dashboard
-WorkingDirectory=${DASH_DIR}/backend
+WorkingDirectory=${DASH_DIR}
 EnvironmentFile=${DASH_DIR}/deploy/.env
-ExecStart=/usr/bin/node server.js
+ExecStart=${DASH_DIR}/server/target/release/ark-dashboard
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=no

@@ -210,7 +210,8 @@ async fn leak_guard_restarts_an_empty_world_over_the_ceiling_and_never_one_with_
         "systemctl start ark-ragnarok 2>&1; echo \"exit=$?\"",
         ShellOpts::default(),
     )
-    .await;
+    .await
+    .expect("exec");
     st.sync_maps().await;
     st.refresh().await;
     let (_, b) = call(&st, "GET", "/api/audit", Some(&basic("admin", "pw")), None).await;
@@ -252,4 +253,149 @@ async fn static_files_stay_inside_the_frontend_folder() {
         call(&st, "GET", "/any/spa/route", Some(&a), None).await.1,
         "<h1>home</h1>"
     );
+}
+
+async fn call_full(
+    st: &Arc<AppState>,
+    method: &str,
+    uri: &str,
+    headers: &[(&str, &str)],
+    body: Option<&str>,
+) -> (StatusCode, axum::http::HeaderMap, String) {
+    let mut b = Request::builder().method(method).uri(uri);
+    for (k, v) in headers {
+        b = b.header(*k, *v);
+    }
+    let resp = app(st.clone())
+        .oneshot(
+            b.body(Body::from(body.unwrap_or("").to_string()))
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    let (status, hdrs) = (resp.status(), resp.headers().clone());
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    (status, hdrs, String::from_utf8_lossy(&bytes).into_owned())
+}
+
+#[tokio::test]
+async fn every_response_carries_the_security_headers() {
+    let st = booted(&[]).await;
+    let a = basic("admin", "pw");
+    for (m, u, auth) in [
+        ("GET", "/api/health", Some(a.as_str())),
+        ("GET", "/api/health", None),
+        ("GET", "/nope", Some(a.as_str())),
+    ] {
+        let hs: Vec<(&str, &str)> = auth.map(|x| ("authorization", x)).into_iter().collect();
+        let (_, h, _) = call_full(&st, m, u, &hs, None).await;
+        assert_eq!(h["x-content-type-options"], "nosniff", "{u}");
+        assert_eq!(h["x-frame-options"], "DENY");
+        assert_eq!(h["referrer-policy"], "no-referrer");
+        assert_eq!(h["cross-origin-opener-policy"], "same-origin");
+    }
+}
+
+#[tokio::test]
+async fn a_foreign_origin_cannot_change_anything_but_may_read() {
+    let st = booted(&[("ALLOWED_ORIGINS", "https://ark.example")]).await;
+    let a = basic("admin", "pw");
+    let post = |origin: &'static str| {
+        let st = st.clone();
+        let a = a.clone();
+        async move {
+            call_full(
+                &st,
+                "POST",
+                "/api/rcon",
+                &[
+                    ("authorization", a.as_str()),
+                    ("content-type", "application/json"),
+                    ("host", "dash.lan:8787"),
+                    ("origin", origin),
+                ],
+                Some(r#"{"id":"theisland","command":"ListPlayers"}"#),
+            )
+            .await
+        }
+    };
+    let (s, _, b) = post("https://evil.example").await;
+    assert_eq!((s, b.as_str()), (StatusCode::FORBIDDEN, "Cross-origin request geweigerd.\n"));
+    assert_eq!(post("http://dash.lan:8787").await.0, StatusCode::OK);
+    assert_eq!(post("https://ark.example").await.0, StatusCode::OK);
+    let (s, _, _) = call_full(
+        &st,
+        "GET",
+        "/api/health",
+        &[("authorization", a.as_str()), ("origin", "https://evil.example")],
+        None,
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    // the refusal is not an action: nothing was logged for the blocked request
+    let (_, b) = call(&st, "GET", "/api/audit", Some(&a), None).await;
+    let v: Value = serde_json::from_str(&b).expect("json");
+    assert_eq!(v["audit"].as_array().expect("audit").len(), 2);
+}
+
+#[tokio::test]
+async fn failed_logins_wait_longer_each_time_but_a_good_login_does_not() {
+    let st = booted(&[]).await;
+    let bad = basic("admin", "nope");
+    let t = std::time::Instant::now();
+    for _ in 0..2 {
+        assert_eq!(call(&st, "GET", "/api/health", Some(&bad), None).await.0, StatusCode::UNAUTHORIZED);
+    }
+    assert!(t.elapsed() >= std::time::Duration::from_millis(250 + 500), "{:?}", t.elapsed());
+    let t = std::time::Instant::now();
+    assert_eq!(call(&st, "GET", "/api/health", Some(&basic("admin", "pw")), None).await.0, StatusCode::OK);
+    assert_eq!(call(&st, "GET", "/api/health", None, None).await.0, StatusCode::UNAUTHORIZED);
+    assert!(t.elapsed() < std::time::Duration::from_millis(200), "no header is not a login attempt");
+}
+
+#[tokio::test]
+async fn an_unreachable_host_gives_unknown_not_stopped_and_500s_with_the_reason() {
+    let fake = Arc::new(FakeVm::new(false));
+    let exec: Arc<dyn Exec> = fake.clone();
+    let st = AppState::new(cfg(&[]), exec);
+    st.sync_maps().await;
+    st.refresh().await;
+    let a = basic("admin", "pw");
+    let state = |b: &str| serde_json::from_str::<Value>(b).expect("json");
+    let island = |v: &Value| v["instances"].as_array().expect("instances").iter().find(|i| i["id"] == "theisland").expect("island")["status"].clone();
+    let (_, b) = call(&st, "GET", "/api/state", Some(&a), None).await;
+    assert_eq!(island(&state(&b)), "running");
+
+    fake.set_down(Some("Proxmox POST /agent/exec \u{2192} HTTP 500 QEMU guest agent is not running"));
+    st.sync_maps().await;
+    st.refresh().await;
+    let (_, b) = call(&st, "GET", "/api/state", Some(&a), None).await;
+    let v = state(&b);
+    assert_eq!(v["connected"], true, "the poller itself survives, like the original");
+    assert_eq!(v["host"], Value::Null);
+    assert_eq!(v["instances"].as_array().expect("instances").len(), 2, "maps are kept, not dropped");
+    assert_eq!(island(&v), "unknown");
+
+    let (s, b) = call(&st, "GET", "/api/backups/theisland", Some(&a), None).await;
+    assert_eq!(s, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(state(&b), serde_json::json!({"ok": false, "error": "Proxmox POST /agent/exec \u{2192} HTTP 500 QEMU guest agent is not running", "backups": []}));
+    let (s, b) = call(&st, "GET", "/api/console/theisland", Some(&a), None).await;
+    assert_eq!((s, state(&b)["lines"].clone()), (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!([])));
+    let (s, _) = call(&st, "POST", "/api/rcon", Some(&a), Some(r#"{"id":"theisland","command":"SaveWorld"}"#)).await;
+    assert_eq!(s, StatusCode::INTERNAL_SERVER_ERROR);
+    let (s, _) = call(&st, "POST", "/api/instance/theisland/action", Some(&a), Some(r#"{"action":"restart"}"#)).await;
+    assert_eq!(s, StatusCode::INTERNAL_SERVER_ERROR);
+    let (s, b) = call(&st, "POST", "/api/maps", Some(&a), Some(r#"{"display":"Aberration","internal":"Aberration_WP","adminPassword":"x","gamePort":7781,"queryPort":27017,"rconPort":27022,"maxPlayers":70}"#)).await;
+    assert_eq!((s, state(&b)["ok"].clone()), (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!(false)));
+    let (_, b) = call(&st, "GET", "/api/update/theisland", Some(&a), None).await;
+    assert_eq!(state(&b)["ok"], false);
+
+    // and it recovers on its own
+    fake.set_down(None);
+    st.sync_maps().await;
+    st.refresh().await;
+    let (_, b) = call(&st, "GET", "/api/state", Some(&a), None).await;
+    assert_eq!(island(&state(&b)), "running");
 }

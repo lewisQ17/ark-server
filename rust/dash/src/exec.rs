@@ -1,7 +1,7 @@
 //! How commands reach the game server. One trait, two implementations:
 //! [`LocalExec`] runs the manager on this machine (sudo -u, like `local.js`), and
 //! [`crate::fake::FakeVm`] answers from memory so nothing is ever executed.
-//! Proxmox guest-exec (`proxmox.js`) is not ported.
+//! [`crate::proxmox::Proxmox`] reaches the VM through the PVE API (guest-exec over the guest agent).
 
 use std::sync::Mutex;
 
@@ -51,8 +51,9 @@ impl ShellOpts {
 
 #[async_trait]
 pub trait Exec: Send + Sync {
-    async fn guest_shell(&self, script: &str, opts: ShellOpts) -> ExecOut;
-    async fn guest_exec(&self, args: &[&str], opts: ShellOpts) -> ExecOut;
+    /// `Err` is a transport failure (the JS original throws): the host cannot be reached, the guest agent is down, ...
+    async fn guest_shell(&self, script: &str, opts: ShellOpts) -> Result<ExecOut, String>;
+    async fn guest_exec(&self, args: &[&str], opts: ShellOpts) -> Result<ExecOut, String>;
     /// Host status in the shape of Proxmox' `status/current`.
     async fn vm_status(&self) -> Result<Value, String>;
     async fn rrddata(&self) -> Result<Vec<Value>, String>;
@@ -238,24 +239,24 @@ impl LocalExec {
 
 #[async_trait]
 impl Exec for LocalExec {
-    async fn guest_shell(&self, script: &str, opts: ShellOpts) -> ExecOut {
+    async fn guest_shell(&self, script: &str, opts: ShellOpts) -> Result<ExecOut, String> {
         let _g = self.queue.lock().await;
         let user = opts
             .as_user
             .clone()
             .unwrap_or_else(|| self.run_as_user.clone());
         let args = ["/bin/bash", "-lc", script].map(String::from);
-        self.spawn_as(Some(&user), &args, &opts).await
+        Ok(self.spawn_as(Some(&user), &args, &opts).await)
     }
 
-    async fn guest_exec(&self, args: &[&str], opts: ShellOpts) -> ExecOut {
+    async fn guest_exec(&self, args: &[&str], opts: ShellOpts) -> Result<ExecOut, String> {
         let _g = self.queue.lock().await;
         let owned: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
         if let Some((user, real)) = unwrap_runuser(&owned) {
-            return self.spawn_as(Some(&user), &real, &opts).await;
+            return Ok(self.spawn_as(Some(&user), &real, &opts).await);
         }
         let user = self.run_as_user.clone();
-        self.spawn_as(Some(&user), &owned, &opts).await
+        Ok(self.spawn_as(Some(&user), &owned, &opts).await)
     }
 
     async fn vm_status(&self) -> Result<Value, String> {

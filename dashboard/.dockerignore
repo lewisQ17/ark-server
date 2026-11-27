@@ -1,7 +1,8 @@
-**/node_modules
 **/.env
 **/.env.*
 !**/.env.example
 .git
 *.log
+server/target
+server/tests/replay
 frontend/_template.xdc.html
