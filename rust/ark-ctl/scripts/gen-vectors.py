@@ -4,6 +4,9 @@ Run:  python3 -I rust/ark-ctl/scripts/gen-vectors.py
 The vectors are what rcon.py returns for synthetic inputs; the Rust tests must reproduce them.
 """
 import importlib.util
+import sys
+
+sys.dont_write_bytecode = True  # do not leave a __pycache__ next to rcon.py
 import json
 import os
 import struct

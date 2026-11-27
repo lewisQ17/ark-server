@@ -93,9 +93,11 @@ pub fn command(t: &mut dyn Transport, cmd: &str, req_id: i32, timeout_secs: f64)
             responses.push_str(&p.payload);
             t.set_timeout_secs(1.0);
             if let Some(p2) = read_packet(t)
-                && p2.id == req_id && !p2.payload.is_empty() {
-                    responses.push_str(&p2.payload);
-                }
+                && p2.id == req_id
+                && !p2.payload.is_empty()
+            {
+                responses.push_str(&p2.payload);
+            }
             t.set_timeout_secs(timeout_secs);
             break;
         }
