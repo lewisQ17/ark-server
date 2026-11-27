@@ -146,9 +146,9 @@ apt-get install -y -qq --no-install-recommends \
 ok "Base packages installed"
 
 if (( WITH_DASHBOARD )); then
-	if ! command -v node >/dev/null 2>&1 || (( $(node -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1 || echo 0) < 18 )); then
-		note "Installing Node.js 20 (the dashboard needs 18+)…"
-		curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+	if ! command -v node >/dev/null 2>&1 || (( $(node -v 2>/dev/null | tr -dc '0-9.' | cut -d. -f1 || echo 0) < 20 )); then
+		note "Installing Node.js 22 (the dashboard needs 20+)…"
+		curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
 		apt-get install -y -qq nodejs >/dev/null
 	fi
 	ok "Node.js $(node -v)"

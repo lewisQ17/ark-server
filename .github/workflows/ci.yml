@@ -1,0 +1,38 @@
+name: ci
+on:
+  push:
+    branches: [main, test]
+  pull_request:
+    branches: [main, test]
+permissions:
+  contents: read
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/backend/package-lock.json
+      - name: Dependencies (lockfile)
+        working-directory: dashboard/backend
+        run: npm ci --no-audit --no-fund
+      - name: Syntax
+        working-directory: dashboard/backend
+        run: for f in *.js; do node --check "$f"; done
+      - name: Tests
+        working-directory: dashboard/backend
+        run: npm test
+      - name: Shell-syntax
+        run: bash -n ark-manager.sh && bash -n install.sh && bash -n healthcheck.sh && bash -n dashboard/deploy/deploy.sh
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

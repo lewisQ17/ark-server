@@ -9,6 +9,7 @@ const catalog = require('./config-catalog');
 const { Proxmox } = require('./proxmox');
 const { LocalExec } = require('./local');
 const { basicAuth } = require('./auth');
+const { securityHeaders, sameOrigin, authThrottle, parseTrusted } = require('./security');
 const { Unifi } = require('./unifi');
 const { ArkInstance, discoverMaps, createMap, deleteMap, suggestPorts } = require('./ark');
 
@@ -16,7 +17,9 @@ const app = express();
 
 // Auth first: nothing below this line — not the API, not the static frontend —
 // is reachable without credentials.
-app.use(basicAuth(config.auth));
+app.use(securityHeaders);
+app.use(authThrottle(basicAuth(config.auth), { trusted: parseTrusted(process.env.TRUSTED_PROXIES) }));
+app.use(sameOrigin(parseTrusted(process.env.ALLOWED_ORIGINS)));
 app.use(express.json());
 
 // One executor, two implementations with the same surface. `local` runs the

@@ -164,3 +164,35 @@ cp deploy/site.env.example deploy/site.env   # fill in your own addresses
   `/vms/<your-vmid>`) and use that instead.
 - RCON admin password is weak (`map.conf` `AdminPassword`) and, per the known ARK-manager
   bug, appears in the server's own launch args. Rotating it is recommended separately.
+
+## Hardening in de backend
+
+- `backend/security.js`: vaste security-headers, Origin-controle op muterende requests
+  (POST/PUT/PATCH/DELETE met een vreemde `Origin` = 403; extra toegestane origins via
+  `ALLOWED_ORIGINS`, komma-gescheiden) en een oplopende vertraging na mislukte logins
+  (geldige logins worden nooit vertraagd).
+- Achter een reverse proxy: zet `TRUSTED_PROXIES` (IP's/CIDR, komma-gescheiden). Alleen dan
+  worden `CF-Connecting-IP` / `X-Forwarded-For` gebruikt voor het client-IP; anders telt het
+  directe peer-adres.
+- Container draait als non-root (`USER node`) met een `HEALTHCHECK` op `/api/health`.
+
+## Tests
+
+```bash
+cd backend && npm ci && npm test
+```
+
+Draait de map-naam-regressietest en de auth/security-tests. CI (`.github/workflows/ci.yml`)
+doet hetzelfde plus een syntaxcheck van de shell-scripts en gitleaks.
+
+## Let op bij uitrollen
+
+Gebruik `deploy/deploy.sh` en bouw niet ad hoc met `docker compose up --build` in een
+bestaande uitrol-map: een eerder handmatig afgeleid image kan afwijken van deze Dockerfile
+(die express wel via `npm ci` installeert). Bij twijfel: eerst vergelijken wat er draait.
+
+## Frontend-bestanden
+
+`frontend/support.js`, `frontend/live.dcscript.js` en `frontend/vendor/*` zijn gegenereerd of
+gebundeld (design-export / React-productiebuilds). Niet met de hand bewerken; pas de bron aan
+en draai `frontend/build.sh`.

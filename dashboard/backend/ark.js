@@ -378,7 +378,7 @@ class ArkInstance {
     const gusOk = c.ok !== false && typeof c.ini === 'string' && c.ini.length > 0;
     const gameOk = cg.ok !== false && typeof cg.ini === 'string' && cg.ini.length > 0;
     let platforms = null;
-    try { platforms = await this.readPlatforms(); } catch { platforms = null; }
+    try { platforms = await this.readPlatforms(); } catch (e) { console.warn('[ark] readPlatforms mislukt:', e.message); platforms = null; }
 
     if (!gusOk && !gameOk) {
       this._cfg = {

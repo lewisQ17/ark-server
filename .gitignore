@@ -22,3 +22,16 @@ Thumbs.db
 .env.local
 secrets.env
 .claude/
+
+# Standaard-blok (audit 2026-11-27)
+.env.*
+!.env.example
+*.pem
+*.key
+geheimen*.json
+*.bak
+*.bak*
+._*
+.claude/worktrees/
+node_modules/
+venv/
