@@ -197,7 +197,13 @@ Or just run `./ark-manager.sh` and use the menu.
 ## File Structure
 
 ```
-ark-manager.sh              # Main management script (run this!)
+ark-manager.sh              # Main management script (run this!): paden, kleuren, dispatch
+lib/                        # De functies, per verantwoordelijkheid (door ark-manager.sh ge-sourced;
+                            # moet naast ark-manager.sh staan, bij een handmatige kopie dus mee kopiëren)
+  core.sh status.sh dashboard.sh add_map.sh game_settings.sh system.sh mods.sh
+  lifecycle.sh rcon.sh map_admin.sh ops.sh menus.sh cli.sh install.sh
+tests/
+  test-ark-manager.sh       # Rooktests in een sandbox met nep-sudo/systemctl/ufw (geen VM nodig)
 rcon.py                     # RCON client (Python 3)
 healthcheck.sh              # Auto-restart crashed maps (cron, auto-generated)
 config/
