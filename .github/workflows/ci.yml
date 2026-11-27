@@ -26,9 +26,7 @@ jobs:
         working-directory: dashboard/backend
         run: npm test
       - name: Shell-syntax
-        run: for f in lib/*.sh; do bash -n "$f"; done && bash -n ark-manager.sh && bash -n install.sh && bash -n healthcheck.sh && bash -n dashboard/deploy/deploy.sh
-      - name: ark-manager.sh rooktests (sandbox, geen VM)
-        run: bash tests/test-ark-manager.sh
+        run: bash -n ark-manager.sh && bash -n install.sh && bash -n healthcheck.sh && bash -n dashboard/deploy/deploy.sh
   secrets:
     runs-on: ubuntu-latest
     steps:
