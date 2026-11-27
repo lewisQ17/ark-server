@@ -38,3 +38,6 @@ Een beveiligingsreview van de door rust-anything 5.0.1 **gegenereerde** brugcode
 - **Geen dieptegrens**: `serde_json`-lezer met `disable_recursion_limit()`: diep genest JSON → stack overflow → proces-abort (niet op te vangen).
 
 Zolang de port **niet** ingeschakeld is (geen `enable`), raakt geen enkel verzoek deze code: ze draait enkel tijdens `diff`/`gate`. Deze bestanden worden door `refresh` overschreven, dus de fix hoort upstream in rust-anything. **Niet inschakelen** voordat dat opgelost is (of de brug per crate vervangen is door een eigen, veilige codec).
+
+## Verificatie 2026-11-27 (app-replay)
+Release-build van `rust/dash`: `cargo test` 28 unit + 8 integratie groen; `app replay --build "sh rust/dash/run-fake.sh"` 148/148 (enkel fake VM, geen Proxmox).
