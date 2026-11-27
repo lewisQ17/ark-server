@@ -1,0 +1,14 @@
+[request]
+method = "GET"
+path = "/index.html"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+
+[response]
+status = 200
+
+[response.headers]
+accept-ranges = "bytes"
+cache-control = "no-cache"
+content-type = "text/html; charset=UTF-8"

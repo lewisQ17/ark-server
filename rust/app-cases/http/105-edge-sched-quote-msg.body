@@ -1,0 +1,1 @@
+{"ok":true,"verified":true,"lines":["5 5 * * 1,3 cd /home/arkadmin/ark-manager && ./ark-manager.sh rcon Ragnarok \"Broadcast say hi - caf...\""]}

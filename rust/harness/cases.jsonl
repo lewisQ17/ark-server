@@ -83,3 +83,66 @@
 {"name":"083-static-noauth","method":"GET","path":"/","headers":{}}
 {"name":"084-traversal","method":"GET","path":"/..%2f..%2fserver.js","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
 {"name":"085-method-not-allowed","method":"PUT","path":"/api/state","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"086-edge-upper-path","method":"GET","path":"/API/STATE?x=1","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"087-edge-trailing-slash","method":"GET","path":"/api/health/","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"088-edge-text-plain-body","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"text/plain"},"body":"id=theisland&command=ListPlayers"}
+{"name":"089-edge-array-body","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"[1,2]"}
+{"name":"090-edge-numeric-id","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":5,\"command\":\"ListPlayers\"}"}
+{"name":"091-edge-command-number","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"theisland\",\"command\":5}"}
+{"name":"092-edge-cfg-set-number","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"MaxTamedDinos\",\"value\":5}"}
+{"name":"093-edge-cfg-set-nokey","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"value\":5}"}
+{"name":"094-edge-cfg-set-null-value","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"PlainKey\",\"value\":null}"}
+{"name":"095-edge-cfg-set-newline","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"MultiLine\",\"value\":\"a\\r\\nb\"}"}
+{"name":"096-edge-cfg-raw-number","method":"POST","path":"/api/config/theisland/raw","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"content\":12345}"}
+{"name":"097-edge-cfg-raw-crlf","method":"POST","path":"/api/config/theisland/raw","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"file\":\"game\",\"content\":\"[/script/shootergame.shootergamemode]\\r\\nEggHatchSpeedMultiplier=•••\\r\\nBabyMatureSpeedMultiplier=••\\r\\nNewKey = •x\\n\"}"}
+{"name":"098-edge-cfg-after-raw","method":"GET","path":"/api/config/theisland?file=game&z=1","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"099-edge-res-strings","method":"POST","path":"/api/instance/ragnarok/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"cores\":\"3\",\"ramGB\":\"5\"}"}
+{"name":"100-edge-res-zero","method":"POST","path":"/api/instance/ragnarok/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"cores\":0,\"ramGB\":-4}"}
+{"name":"101-edge-res-garbage","method":"POST","path":"/api/instance/ragnarok/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"cores\":\"lots\",\"ramGB\":99}"}
+{"name":"102-edge-res-fraction","method":"POST","path":"/api/instance/ragnarok/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"cores\":0.1,\"ramGB\":2.5}"}
+{"name":"103-edge-res-get","method":"GET","path":"/api/instance/ragnarok/resources?z=1","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"104-edge-sched-legacy","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"multiplier\",\"cron\":\"0 1 * * *\",\"key\":\"TamingSpeedMultiplier\",\"value\":\"2.5\",\"file\":\"gus\"}"}
+{"name":"105-edge-sched-quote-msg","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"broadcast\",\"cron\":\"5 5 * * 1,3\",\"message\":\"say \\\"hi\\\" — café\\n…\"}"}
+{"name":"106-edge-sched-nomsg","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"broadcast\",\"cron\":\"5 5 * * 2\"}"}
+{"name":"107-edge-sched-save","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"save\",\"cron\":\"*/10 * * * *\"}"}
+{"name":"108-edge-sched-list","method":"GET","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"109-edge-sched-bad-rev","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"multiplier\",\"cron\":\"0 1 * * *\",\"rates\":[{\"key\":\"A\",\"value\":\"1\",\"revertValue\":\"x\"}]}"}
+{"name":"110-edge-sched-bad-val","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"multiplier\",\"cron\":\"0 1 * * *\",\"rates\":[{\"key\":\"A\",\"value\":\"1.\"}]}"}
+{"name":"111-edge-sched-empty-key","method":"POST","path":"/api/schedule/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"multiplier\",\"cron\":\"0 1 * * *\",\"rates\":[{\"value\":\"1\"}]}"}
+{"name":"112-edge-bk-del-number","method":"DELETE","path":"/api/backups/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"name\":12345}"}
+{"name":"113-edge-bk-restore-noname","method":"POST","path":"/api/backups/theisland/restore","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"114-edge-bk-create-ragnarok","method":"POST","path":"/api/backups/ragnarok/create","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"115-edge-bk-list-ragnarok","method":"GET","path":"/api/backups/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"116-edge-action-array","method":"POST","path":"/api/instance/theisland/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":[\"start\"]}"}
+{"name":"117-edge-action-start","method":"POST","path":"/api/instance/ragnarok/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"start\"}"}
+{"name":"118-edge-action-stop","method":"POST","path":"/api/instance/ragnarok/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"stop\"}"}
+{"name":"119-edge-action-save-unknown","method":"POST","path":"/api/instance/zzz/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"save\"}"}
+{"name":"120-edge-action-vmstart","method":"POST","path":"/api/instance/theisland/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"vmstart\"}"}
+{"name":"121-edge-settings-blank","method":"POST","path":"/api/instance/theisland/settings","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"sessionName\":\"   \"}"}
+{"name":"122-edge-settings-unknown","method":"POST","path":"/api/instance/zzz/settings","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"sessionName\":\"x\"}"}
+{"name":"123-edge-console-nan","method":"GET","path":"/api/console/theisland?n=abc","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"124-edge-console-neg","method":"GET","path":"/api/console/theisland?n=-5","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"125-edge-console-float","method":"GET","path":"/api/console/theisland?n=3.7","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"126-edge-console-empty","method":"GET","path":"/api/console/theisland?n=","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"127-edge-platforms-dups","method":"POST","path":"/api/config/theisland/platforms","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"list\":[\"ps5\",\"PS5\",\"pc\"]}"}
+{"name":"128-edge-platforms-notarray","method":"POST","path":"/api/config/theisland/platforms","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"list\":\"PC\"}"}
+{"name":"129-edge-platforms-state","method":"GET","path":"/api/config/theisland?file=gus&z=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"130-edge-unknown-get","method":"GET","path":"/api/nope","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"131-edge-unknown-post","method":"POST","path":"/api/nope","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"132-edge-unknown-delete","method":"DELETE","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"133-edge-encoded-id","method":"GET","path":"/api/instance/the%49sland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"134-edge-vendor","method":"GET","path":"/vendor/react.production.min.js","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"135-edge-dotfile","method":"GET","path":"/.env","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"136-edge-index-direct","method":"GET","path":"/index.html","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"137-edge-dir","method":"GET","path":"/vendor/","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"138-edge-dir-noslash","method":"GET","path":"/vendor","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"139-edge-state-final","method":"GET","path":"/api/state?final=1","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"140-edge-audit-final","method":"GET","path":"/api/audit?final=1","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"141-edge-map-create-strings","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Fjordur\",\"internal\":\"Fjordur_WP\",\"gamePort\":\"7790\",\"queryPort\":\"27030\",\"rconPort\":\"27031\",\"maxPlayers\":\"20\",\"adminPassword\":\"dummy-fj\",\"sessionName\":\"café \\\"x\\\"\\n\",\"cores\":\"1\"}"}
+{"name":"142-edge-map-available-fj","method":"GET","path":"/api/maps/available?z=3","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"143-edge-map-create-bad-internal","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Zed\",\"internal\":\"Z ed\",\"adminPassword\":\"x\"}"}
+{"name":"144-edge-map-create-float-port","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Zed\",\"internal\":\"Zed_WP\",\"gamePort\":7777.5,\"queryPort\":1,\"rconPort\":1,\"maxPlayers\":1,\"adminPassword\":\"x\"}"}
+{"name":"145-edge-map-create-zero-players","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Zed\",\"internal\":\"Zed_WP\",\"gamePort\":1,\"queryPort\":1,\"rconPort\":1,\"maxPlayers\":0,\"adminPassword\":\"x\"}"}
+{"name":"146-edge-map-delete-fj","method":"DELETE","path":"/api/maps/Fjordur","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"147-edge-map-delete-unknown","method":"DELETE","path":"/api/maps/NeverExisted","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"148-edge-state-after","method":"GET","path":"/api/state?after=1","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}

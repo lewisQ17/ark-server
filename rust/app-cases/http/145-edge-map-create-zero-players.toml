@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/maps"
+body = '{"display":"Zed","internal":"Zed_WP","gamePort":1,"queryPort":1,"rconPort":1,"maxPlayers":0,"adminPassword":"x"}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

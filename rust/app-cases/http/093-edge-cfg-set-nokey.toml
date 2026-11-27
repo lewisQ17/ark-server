@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/config/theisland/set"
+body = '{"value":5}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

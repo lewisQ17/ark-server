@@ -1,0 +1,19 @@
+{"fn":"suggestPorts","args":[[]]}
+{"fn":"suggestPorts","args":[[{"display":"TheIsland","internal":"TheIsland_WP","gamePort":"7777","queryPort":"27015","rconPort":"27020","maxPlayers":"70"}]]}
+{"fn":"suggestPorts","args":[[{"display":"TheIsland","gamePort":"7777","queryPort":"27015","rconPort":"27020"},{"display":"Ragnarok","gamePort":"7779","queryPort":"27016","rconPort":"27021"}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":7779,"queryPort":27016,"rconPort":27021}]]}
+{"fn":"suggestPorts","args":[[{"display":"NoPorts"}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":"abc","queryPort":"","rconPort":null}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":"  8000x","queryPort":"-5","rconPort":"+27100"}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":"7.9e3","queryPort":"0x10","rconPort":"1e3"}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":1,"queryPort":1,"rconPort":1}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":"99999999999999999999","queryPort":"27015","rconPort":"27020"}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":[7800],"queryPort":[27100,5],"rconPort":true}]]}
+{"fn":"suggestPorts","args":[[{"gamePort":{"a":1},"queryPort":12.9,"rconPort":-0.5}]]}
+{"fn":"suggestPorts","args":[[1,"x",true,[],{"gamePort":"8001"}]]}
+{"fn":"suggestPorts","args":[[null]]}
+{"fn":"suggestPorts","args":["abc"]}
+{"fn":"suggestPorts","args":[""]}
+{"fn":"suggestPorts","args":[null]}
+{"fn":"suggestPorts","args":[{"gamePort":"7777"}]}
+{"fn":"suggestPorts","args":[7]}

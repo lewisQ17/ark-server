@@ -1,0 +1,1 @@
+{"ok":true,"verified":true,"lines":["*/10 * * * * cd /home/arkadmin/ark-manager && ./ark-manager.sh rcon Ragnarok \"SaveWorld\""]}

@@ -1,0 +1,1 @@
+{"ok":false,"error":"Refusing to start the machine: in local mode \"the VM\" is this server itself. Set ALLOW_HOST_POWER=1 in the dashboard env if you really want the panel to be able to do that."}

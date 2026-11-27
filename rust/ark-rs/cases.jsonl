@@ -1,0 +1,31 @@
+{"fn":"suggestPorts","args":[["a",1]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[]],"ok":{"gamePort":7777,"queryPort":27015,"rconPort":27020}}
+{"fn":"suggestPorts","args":[{"a":"b"}],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[0],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[true],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":["x"],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[null],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[{"a":{"b":"c"}}],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[{}],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[{"2":4,"10":3,"zebra":1,"apple":2,"é":5,"Apple":6}],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[{"n":9007199254740992,"f":1e+21,"t":0.1,"neg":-7}],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[[3,1,2]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[]],"ok":{"gamePort":7777,"queryPort":27015,"rconPort":27020}}
+{"fn":"suggestPorts","args":[[{"display":"TheIsland","internal":"TheIsland_WP","gamePort":"7777","queryPort":"27015","rconPort":"27020","maxPlayers":"70"}]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"display":"TheIsland","gamePort":"7777","queryPort":"27015","rconPort":"27020"},{"display":"Ragnarok","gamePort":"7779","queryPort":"27016","rconPort":"27021"}]],"ok":{"gamePort":7781,"queryPort":27017,"rconPort":27022}}
+{"fn":"suggestPorts","args":[[{"gamePort":7779,"queryPort":27016,"rconPort":27021}]],"ok":{"gamePort":7781,"queryPort":27017,"rconPort":27022}}
+{"fn":"suggestPorts","args":[[{"display":"NoPorts"}]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"gamePort":"abc","queryPort":"","rconPort":null}]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"gamePort":"  8000x","queryPort":"-5","rconPort":"+27100"}]],"ok":{"gamePort":8002,"queryPort":27016,"rconPort":27101}}
+{"fn":"suggestPorts","args":[[{"gamePort":"7.9e3","queryPort":"0x10","rconPort":"1e3"}]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"gamePort":1,"queryPort":1,"rconPort":1}]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"gamePort":"99999999999999999999","queryPort":"27015","rconPort":"27020"}]],"ok":{"gamePort":100000000000000000000,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"gamePort":[7800],"queryPort":[27100,5],"rconPort":true}]],"ok":{"gamePort":7802,"queryPort":27101,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[{"gamePort":{"a":1},"queryPort":12.9,"rconPort":-0.5}]],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[1,"x",true,[],{"gamePort":"8001"}]],"ok":{"gamePort":8003,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[[null]],"error":"Cannot read properties of null (reading 'gamePort')"}
+{"fn":"suggestPorts","args":["abc"],"ok":{"gamePort":7779,"queryPort":27016,"rconPort":27021}}
+{"fn":"suggestPorts","args":[""],"ok":{"gamePort":7777,"queryPort":27015,"rconPort":27020}}
+{"fn":"suggestPorts","args":[null],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[{"gamePort":"7777"}],"error":"maps is not iterable"}
+{"fn":"suggestPorts","args":[7],"error":"maps is not iterable"}

@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/instance/ragnarok/resources"
+body = '{"cores":0.1,"ramGB":2.5}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

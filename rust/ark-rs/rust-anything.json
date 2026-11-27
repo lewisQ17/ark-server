@@ -1,0 +1,49 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "../..",
+  "unit": "dashboard/backend/ark.js",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "ark-rs",
+  "exports": [
+    {
+      "name": "suggestPorts",
+      "file": "dashboard/backend/ark.js",
+      "line": 844,
+      "params": [
+        {
+          "name": "maps",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "discoverMaps",
+      "file": "dashboard/backend/ark.js",
+      "line": 704,
+      "reason": "takes the pmx executor object, which cannot cross the bridge"
+    },
+    {
+      "name": "createMap",
+      "file": "dashboard/backend/ark.js",
+      "line": 740,
+      "reason": "takes the pmx executor object"
+    },
+    {
+      "name": "deleteMap",
+      "file": "dashboard/backend/ark.js",
+      "line": 818,
+      "reason": "takes the pmx executor object"
+    }
+  ]
+}

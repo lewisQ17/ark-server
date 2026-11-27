@@ -1,8 +1,8 @@
 # App replay
 
-Build: `node rust/harness/run-original.js`
+Build: `sh rust/dash/run-fake.sh`
 
-Passed: 85/85
+Passed: 148/148
 
 Fallback rate: not reported by this build
 

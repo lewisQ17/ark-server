@@ -1,0 +1,12 @@
+[request]
+method = "GET"
+path = "/api/console/theisland?n=3.7"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

@@ -1,0 +1,30 @@
+[package]
+name = "ark-dashboard"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Rust port of the ARK dashboard backend (dashboard/backend/*.js): axum server, Exec trait, in-memory fake VM"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ark-dashboard"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+axum = "0.8"
+percent-encoding = "2"
+regex = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["macros", "net", "process", "rt-multi-thread", "signal", "sync", "time", "io-util"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[workspace]
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

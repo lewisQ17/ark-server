@@ -1,0 +1,15 @@
+[request]
+method = "GET"
+path = "/vendor"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+
+[response]
+status = 301
+
+[response.headers]
+content-security-policy = "default-src 'none'"
+content-type = "text/html; charset=UTF-8"
+location = "/vendor/"
+x-content-type-options = "nosniff"

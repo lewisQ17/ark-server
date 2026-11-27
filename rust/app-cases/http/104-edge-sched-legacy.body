@@ -1,0 +1,1 @@
+{"ok":true,"verified":true,"lines":["0 1 * * * cd /home/arkadmin/ark-manager && ./ark-manager.sh rcon Ragnarok \"Broadcast Scheduled announcement\" ; bash /home/arkadmin/ark-manager/dashboard-set-rate.sh TamingSpeedMultiplier 2.5 gus /home/arkadmin/ark-manager/maps/Ragnarok"]}

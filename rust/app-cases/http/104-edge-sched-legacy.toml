@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/schedule/ragnarok"
+body = '{"taskType":"multiplier","cron":"0 1 * * *","key":"TamingSpeedMultiplier","value":"2.5","file":"gus"}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/maps"
+body = '{"display":"Fjordur","internal":"Fjordur_WP","gamePort":"7790","queryPort":"27030","rconPort":"27031","maxPlayers":"20","adminPassword":"dummy-fj","sessionName":"café \"x\"\n","cores":"1"}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"
