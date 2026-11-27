@@ -1,0 +1,1 @@
+{"ok":true,"display":"Fwdmap","service":"ark-fwdmap.service","output":"SVCOK","forward":{"ok":true,"wanPort":7791},"resources":{"ok":true,"cores":2,"ramGB":6,"quota":"200%","memHigh":"5530M","memMax":"6G","output":""}}

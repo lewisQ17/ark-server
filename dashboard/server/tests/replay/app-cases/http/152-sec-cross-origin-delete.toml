@@ -1,0 +1,17 @@
+[request]
+method = "DELETE"
+path = "/api/maps/Nothing"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+origin = "https://evil.example"
+
+[response]
+status = 403
+
+[response.headers]
+content-type = "text/plain; charset=utf-8"
+cross-origin-opener-policy = "same-origin"
+referrer-policy = "no-referrer"
+x-content-type-options = "nosniff"
+x-frame-options = "DENY"

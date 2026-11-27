@@ -1,0 +1,19 @@
+[request]
+method = "DELETE"
+path = "/api/maps"
+body = "{}"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 404
+
+[response.headers]
+content-security-policy = "default-src 'none'"
+content-type = "text/html; charset=utf-8"
+cross-origin-opener-policy = "same-origin"
+referrer-policy = "no-referrer"
+x-content-type-options = "nosniff"
+x-frame-options = "DENY"

@@ -1,0 +1,1 @@
+{"ok":true,"display":"Failmap","service":"ark-failmap.service","output":"SVCOK","forward":{"ok":false,"error":"UniFi POST /rest/portforward → HTTP 400 api.err.PortInUse"}}

@@ -1,0 +1,18 @@
+[request]
+method = "POST"
+path = "/api/maps"
+body = '{"display":"Valguero","internal":"Valguero_WP","gamePort":7781,"queryPort":27017,"rconPort":27022,"maxPlayers":10,"adminPassword":"dummy-valg","serverPassword":"","sessionName":"Valguero demo","cores":2,"ramGB":6}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"
+cross-origin-opener-policy = "same-origin"
+referrer-policy = "no-referrer"
+x-content-type-options = "nosniff"
+x-frame-options = "DENY"

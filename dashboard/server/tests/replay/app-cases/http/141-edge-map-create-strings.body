@@ -1,0 +1,1 @@
+{"ok":true,"display":"Fjordur","service":"ark-fjordur.service","output":"SVCOK","forward":{"ok":true,"wanPort":7790},"resources":{"ok":true,"cores":1,"ramGB":14,"quota":"100%","memHigh":"12902M","memMax":"14G","output":""}}

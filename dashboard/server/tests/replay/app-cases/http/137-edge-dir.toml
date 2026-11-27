@@ -1,0 +1,18 @@
+[request]
+method = "GET"
+path = "/vendor/"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+
+[response]
+status = 200
+
+[response.headers]
+accept-ranges = "bytes"
+cache-control = "no-cache"
+content-type = "text/html; charset=UTF-8"
+cross-origin-opener-policy = "same-origin"
+referrer-policy = "no-referrer"
+x-content-type-options = "nosniff"
+x-frame-options = "DENY"
