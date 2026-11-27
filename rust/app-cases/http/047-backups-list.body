@@ -1,0 +1,1 @@
+{"ok":true,"dir":"/home/arkadmin/ark-manager/maps/TheIsland/backups","backups":[{"name":"TheIsland_scheduled_20260102_030000.tar.gz","size":"1.1G","when":"2026-01-02 03:00:00","trigger":"scheduled"},{"name":"TheIsland_20260101_100000.tar.gz","size":"1.2G","when":"2026-01-01 10:00:00","trigger":"manual"}]}

@@ -1,0 +1,1 @@
+{"ok":true,"verified":true,"lines":["15 2 * * * bash /home/arkadmin/ark-manager/dashboard-backup.sh /home/arkadmin/ark-manager/maps/TheIsland /home/arkadmin/ark-manager/server-files TheIsland scheduled"]}

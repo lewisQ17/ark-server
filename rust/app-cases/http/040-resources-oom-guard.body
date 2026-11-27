@@ -1,0 +1,1 @@
+{"ok":false,"needsForce":true,"liveGB":6,"cores":1,"ramGB":2,"error":"Requested 2 GB is below this world's live use (6 GB). Stop the world first or raise the limit."}

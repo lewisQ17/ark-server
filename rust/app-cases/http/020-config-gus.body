@@ -1,0 +1,1 @@
+{"ok":true,"path":"/home/arkadmin/ark-manager/maps/TheIsland/GameUserSettings.ini","ini":"[ServerSettings]\nSessionName=TheIsland test\nServerAdminPassword=••••••\nServerPassword=\nRCONEnabled=True\nXPMultiplier=2.0\nHarvestAmountMultiplier=1.5\nTamingSpeedMultiplier=3.0\nServerPVE=True\nMaxTamedDinos=4000\nOverrideOfficialDifficulty=5.0\n"}

@@ -1,0 +1,1 @@
+{"ok":true,"verified":true,"lines":["30 5 * * * cd /home/arkadmin/ark-manager && ./ark-manager.sh restart TheIsland"]}

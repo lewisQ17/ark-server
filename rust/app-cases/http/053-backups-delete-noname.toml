@@ -1,0 +1,14 @@
+[request]
+method = "DELETE"
+path = "/api/backups/theisland"
+body = "{}"
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 400
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

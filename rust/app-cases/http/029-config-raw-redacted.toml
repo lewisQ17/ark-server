@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/config/theisland/raw"
+body = '{"file":"gus","content":"[ServerSettings]\nServerAdminPassword=••••••\nXPMultiplier=7\n"}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"

@@ -1,0 +1,85 @@
+{"name":"001-health","method":"GET","path":"/api/health","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"002-noauth","method":"GET","path":"/api/health","headers":{}}
+{"name":"003-badauth","method":"GET","path":"/api/health","headers":{"authorization":"Basic YWRtaW46bm9wZQ=="}}
+{"name":"004-bearer-scheme","method":"GET","path":"/api/health","headers":{"authorization":"Bearer abc"}}
+{"name":"005-state","method":"GET","path":"/api/state","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"006-instance","method":"GET","path":"/api/instance/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"007-instance-stopped","method":"GET","path":"/api/instance/ragnarok","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"008-instance-unknown","method":"GET","path":"/api/instance/nope","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"009-catalog","method":"GET","path":"/api/config-catalog","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"010-audit-empty","method":"GET","path":"/api/audit","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"011-maps-available","method":"GET","path":"/api/maps/available","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"012-rcon-listplayers","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"theisland\",\"command\":\"ListPlayers\"}"}
+{"name":"013-rcon-saveworld","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"theisland\",\"command\":\"SaveWorld\"}"}
+{"name":"014-rcon-kick-danger","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"theisland\",\"command\":\"KickPlayer 0002abc\"}"}
+{"name":"015-rcon-no-command","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"theisland\"}"}
+{"name":"016-rcon-unknown-instance","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"zzz\",\"command\":\"x\"}"}
+{"name":"017-rcon-stopped-map","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"ragnarok\",\"command\":\"ListPlayers\"}"}
+{"name":"018-console","method":"GET","path":"/api/console/theisland?n=4","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"019-console-unknown","method":"GET","path":"/api/console/nope","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"020-config-gus","method":"GET","path":"/api/config/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"021-config-game","method":"GET","path":"/api/config/theisland?file=game","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"022-config-unknown","method":"GET","path":"/api/config/nope","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"023-config-set-ok","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"XPMultiplier\",\"value\":\"4.5\",\"file\":\"gus\"}"}
+{"name":"024-config-set-new-key","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"MaxStructuresVisible\",\"value\":\"2000\"}"}
+{"name":"025-config-set-game","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"EggHatchSpeedMultiplier\",\"value\":\"9\",\"file\":\"game\"}"}
+{"name":"026-config-set-badkey","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"bad key;x\",\"value\":\"1\"}"}
+{"name":"027-config-set-nonascii","method":"POST","path":"/api/config/theisland/set","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"key\":\"SessionName\",\"value\":\"Café “quoted” — 🦖\"}"}
+{"name":"028-config-after-set","method":"GET","path":"/api/config/theisland?r=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"029-config-raw-redacted","method":"POST","path":"/api/config/theisland/raw","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"file\":\"gus\",\"content\":\"[ServerSettings]\\nServerAdminPassword=••••••\\nXPMultiplier=7\\n\"}"}
+{"name":"030-config-raw-nocontent","method":"POST","path":"/api/config/theisland/raw","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"file\":\"gus\"}"}
+{"name":"031-config-platforms","method":"POST","path":"/api/config/theisland/platforms","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"list\":[\"pc\",\"XSX\",\"bogus\"]}"}
+{"name":"032-config-platforms-all","method":"POST","path":"/api/config/theisland/platforms","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"list\":[]}"}
+{"name":"033-config-platforms-unknown","method":"POST","path":"/api/config/nope/platforms","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"list\":[]}"}
+{"name":"034-settings-name","method":"POST","path":"/api/instance/theisland/settings","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"sessionName\":\"Renamed Island\"}"}
+{"name":"035-settings-passwords","method":"POST","path":"/api/instance/theisland/settings","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"adminPassword\":\"dummy-new-admin\",\"serverPassword\":\"dummy-join\"}"}
+{"name":"036-settings-nothing","method":"POST","path":"/api/instance/theisland/settings","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"037-rcon-after-pw-change","method":"POST","path":"/api/rcon","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"id\":\"theisland\",\"command\":\"ListPlayers\",\"note\":\"after pw change\"}"}
+{"name":"038-resources-get","method":"GET","path":"/api/instance/theisland/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"039-resources-set","method":"POST","path":"/api/instance/ragnarok/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"cores\":2,\"ramGB\":8}"}
+{"name":"040-resources-oom-guard","method":"POST","path":"/api/instance/theisland/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"cores\":1,\"ramGB\":2}"}
+{"name":"041-resources-after","method":"GET","path":"/api/instance/ragnarok/resources","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"042-action-stop","method":"POST","path":"/api/instance/ragnarok/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"restart\"}"}
+{"name":"043-action-save","method":"POST","path":"/api/instance/theisland/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"save\"}"}
+{"name":"044-action-vmreboot","method":"POST","path":"/api/instance/theisland/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"vmreboot\"}"}
+{"name":"045-action-unknown","method":"POST","path":"/api/instance/theisland/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"explode\"}"}
+{"name":"046-action-unknown-instance","method":"POST","path":"/api/instance/zzz/action","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"action\":\"start\"}"}
+{"name":"047-backups-list","method":"GET","path":"/api/backups/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"048-backups-unknown","method":"GET","path":"/api/backups/zzz","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"049-backups-create","method":"POST","path":"/api/backups/theisland/create","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"050-backups-list-after","method":"GET","path":"/api/backups/theisland?r=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"051-backups-delete","method":"DELETE","path":"/api/backups/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"name\":\"TheIsland_20260101_100000.tar.gz\"}"}
+{"name":"052-backups-delete-badname","method":"DELETE","path":"/api/backups/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"name\":\"../../etc/passwd\"}"}
+{"name":"053-backups-delete-noname","method":"DELETE","path":"/api/backups/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"054-backups-restore","method":"POST","path":"/api/backups/theisland/restore","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"name\":\"TheIsland_scheduled_20260102_030000.tar.gz\"}"}
+{"name":"055-backups-restore-bad","method":"POST","path":"/api/backups/theisland/restore","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"name\":\"x.zip\"}"}
+{"name":"056-schedule-list","method":"GET","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"057-schedule-add-restart","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"restart\",\"cron\":\"30 5 * * *\"}"}
+{"name":"058-schedule-add-broadcast","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"broadcast\",\"cron\":\"0 */6 * * *\",\"message\":\"Café \\\"x\\\" restart soon\"}"}
+{"name":"059-schedule-add-backup","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"backup\",\"cron\":\"15 2 * * *\"}"}
+{"name":"060-schedule-add-rates","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"multiplier\",\"cron\":\"0 18 * * 5\",\"endCron\":\"0 18 * * 0\",\"message\":\"Weekend rates\",\"restart\":true,\"rates\":[{\"key\":\"XPMultiplier\",\"value\":\"3\",\"file\":\"gus\",\"revertValue\":\"1\"},{\"key\":\"EggHatchSpeedMultiplier\",\"value\":\"5\",\"file\":\"game\"}]}"}
+{"name":"061-schedule-bad-cron","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"restart\",\"cron\":\"every day\"}"}
+{"name":"062-schedule-bad-type","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"nuke\",\"cron\":\"0 0 * * *\"}"}
+{"name":"063-schedule-bad-rate","method":"POST","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"taskType\":\"multiplier\",\"cron\":\"0 0 * * *\",\"rates\":[{\"key\":\"X;rm\",\"value\":\"1\"}]}"}
+{"name":"064-schedule-list-after","method":"GET","path":"/api/schedule/theisland?r=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"065-schedule-delete","method":"DELETE","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"match\":\"restart TheIsland\"}"}
+{"name":"066-schedule-delete-short","method":"DELETE","path":"/api/schedule/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"match\":\"ab\"}"}
+{"name":"067-update-check","method":"GET","path":"/api/update/theisland","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"068-update-apply","method":"POST","path":"/api/update/theisland/apply","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}
+{"name":"069-map-create-badname","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Bad Name\",\"internal\":\"X_WP\",\"gamePort\":1,\"queryPort\":2,\"rconPort\":3,\"maxPlayers\":5,\"adminPassword\":\"x\"}"}
+{"name":"070-map-create-noadmin","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Valguero\",\"internal\":\"Valguero_WP\",\"gamePort\":7781,\"queryPort\":27017,\"rconPort\":27022,\"maxPlayers\":10}"}
+{"name":"071-map-create-badport","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Valguero\",\"internal\":\"Valguero_WP\",\"gamePort\":70000,\"queryPort\":27017,\"rconPort\":27022,\"maxPlayers\":10,\"adminPassword\":\"x\"}"}
+{"name":"072-map-create-missing","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Valguero\"}"}
+{"name":"073-map-create-exists","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"TheIsland\",\"internal\":\"TheIsland_WP\",\"gamePort\":7781,\"queryPort\":27017,\"rconPort\":27022,\"maxPlayers\":10,\"adminPassword\":\"x\"}"}
+{"name":"074-map-create-ok","method":"POST","path":"/api/maps","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{\"display\":\"Valguero\",\"internal\":\"Valguero_WP\",\"gamePort\":7781,\"queryPort\":27017,\"rconPort\":27022,\"maxPlayers\":10,\"adminPassword\":\"dummy-valg\",\"serverPassword\":\"\",\"sessionName\":\"Valguero demo\",\"cores\":2,\"ramGB\":6}"}
+{"name":"075-maps-available-after","method":"GET","path":"/api/maps/available?r=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"076-state-after-create","method":"GET","path":"/api/state?r=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"077-map-delete-bad","method":"DELETE","path":"/api/maps/bad;name","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"078-map-delete-ok","method":"DELETE","path":"/api/maps/Valguero","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"079-audit-full","method":"GET","path":"/api/audit?r=2","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"080-static-index","method":"GET","path":"/","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"081-static-spa-fallback","method":"GET","path":"/some/deep/route","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"082-static-js","method":"GET","path":"/support.js","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"083-static-noauth","method":"GET","path":"/","headers":{}}
+{"name":"084-traversal","method":"GET","path":"/..%2f..%2fserver.js","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"}}
+{"name":"085-method-not-allowed","method":"PUT","path":"/api/state","headers":{"authorization":"Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz","content-type":"application/json"},"body":"{}"}

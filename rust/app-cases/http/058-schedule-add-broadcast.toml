@@ -1,0 +1,14 @@
+[request]
+method = "POST"
+path = "/api/schedule/theisland"
+body = '{"taskType":"broadcast","cron":"0 */6 * * *","message":"Café \"x\" restart soon"}'
+
+[request.headers]
+authorization = "Basic YWRtaW46ZHVtbXktZGFzaC1wYXNz"
+content-type = "application/json"
+
+[response]
+status = 200
+
+[response.headers]
+content-type = "application/json; charset=utf-8"
