@@ -29,3 +29,12 @@ Next session: read [HANDOFF.md](HANDOFF.md) first.
   the Node one on CT120. Needs a decision: record against a stub of the PVE API.
 - `app lift` was not run: the Rust server is a hand-written crate, not a wired front door.
 - `ark-ctl`: `create_optimized_game_settings`, mod name lookups (network), `check_map_health` and the dashboard table are not ported.
+## ⚠️ Niet `enable`n vóór upstream-fix van de gegenereerde napi-brug (2026-11-27)
+
+Een beveiligingsreview van de door rust-anything 5.0.1 **gegenereerde** brugcode (`rust/*/index.cjs`, `rust/*/src/js.rs`) vond:
+
+- **Marker-injectie**: objecten met één sleutel `$bigint` / `$map` / `$set` / `$buffer` worden bij het decoderen als BigInt/Map/Set/Buffer "herleefd": invoer die er zo uitziet verandert van type.
+- **`__proto__`**: `rDyn` bouwt objecten met `o[k] = …`; een sleutel `__proto__` zet het prototype van dat object.
+- **Geen dieptegrens**: `serde_json`-lezer met `disable_recursion_limit()`: diep genest JSON → stack overflow → proces-abort (niet op te vangen).
+
+Zolang de port **niet** ingeschakeld is (geen `enable`), raakt geen enkel verzoek deze code: ze draait enkel tijdens `diff`/`gate`. Deze bestanden worden door `refresh` overschreven, dus de fix hoort upstream in rust-anything. **Niet inschakelen** voordat dat opgelost is (of de brug per crate vervangen is door een eigen, veilige codec).

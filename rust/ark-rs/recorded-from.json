@@ -1,7 +1,7 @@
 {
   "unit": "dashboard/backend/ark.js",
   "files": 1,
-  "fingerprint": "40ff4be8fb527ed8",
+  "fingerprint": "1244ac4f7c74555e",
   "cases": 31,
   "cases_hash": "e0640f14bd633b5d",
   "coverage": {
